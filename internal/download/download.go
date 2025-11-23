@@ -90,19 +90,28 @@ func DownloadJar(version string) (string, error) {
 		return "", err
 	}
 
-	tempFile := jarName + ".part"
-	if _, err := os.Stat(tempFile); err == nil {
-		fmt.Printf("Found incomplete download %s, removing...\n", tempFile)
-		os.Remove(tempFile)
+	if _, err := os.Stat(jarName); err == nil {
+		fmt.Printf("[INFO] JAR file already exists: %s\n", jarName)
+		checksumFile := jarName + ".sha256"
+		if expectedChecksum, err := utils.LoadChecksumFile(checksumFile); err == nil && expectedChecksum != "" {
+			if err := utils.ValidateChecksum(jarName, expectedChecksum); err == nil {
+				fmt.Printf("[OK] Existing JAR file checksum validated\n")
+				return jarName, nil
+			}
+		}
+		fmt.Printf("[INFO] Re-downloading to ensure integrity...\n")
 	}
 
-	if _, err := os.Stat(jarName); err == nil {
-		fmt.Printf("JAR file already exists: %s\n", jarName)
-		return jarName, nil
+	tempFile := jarName + ".part"
+	if _, err := os.Stat(tempFile); err == nil {
+		fmt.Printf("[INFO] Found incomplete download, removing...\n")
+		if err := os.Remove(tempFile); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARN] Failed to remove incomplete download: %v\n", err)
+		}
 	}
 
 	url := fmt.Sprintf("%s/versions/%s/builds/%d/downloads/%s", apiBase, version, build, jarName)
-	fmt.Printf("Downloading from: %s\n", url)
+	fmt.Printf("[INFO] Downloading %s...\n", jarName)
 
 	if err := downloadFile(client, url, jarName); err != nil {
 		return "", err
@@ -115,18 +124,17 @@ func DownloadJar(version string) (string, error) {
 
 	checksumFile := jarName + ".sha256"
 	if err := utils.SaveChecksumFile(checksumFile, checksum); err != nil {
-		return "", fmt.Errorf("failed to save checksum: %w", err)
+		return "", fmt.Errorf("failed to save checksum file: %w", err)
 	}
 
-	fmt.Printf("Downloaded JAR file checksum (SHA-256): %s\n", checksum)
-	fmt.Printf("Validated downloaded JAR file: %s\n", jarName)
+	fmt.Printf("[OK] Downloaded and validated JAR file (SHA-256: %s)\n", checksum[:16]+"...")
 	return jarName, nil
 }
 
 func doRequest(client *http.Client, url string) (*http.Response, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("User-Agent", userAgent)
 	return client.Do(req)
@@ -217,9 +225,11 @@ func downloadFile(client *http.Client, url, filename string) error {
 	}
 
 	tempFile := filename + ".part"
-	
+
 	if _, err := os.Stat(tempFile); err == nil {
-		os.Remove(tempFile)
+		if err := os.Remove(tempFile); err != nil {
+			return fmt.Errorf("failed to remove existing temp file: %w", err)
+		}
 	}
 
 	out, err := os.Create(tempFile)
@@ -260,15 +270,17 @@ func downloadFile(client *http.Client, url, filename string) error {
 	closed = true
 
 	success = true
-	
+
 	if _, err := os.Stat(filename); err == nil {
-		os.Remove(filename)
+		if err := os.Remove(filename); err != nil {
+			return fmt.Errorf("failed to remove existing file: %w", err)
+		}
 	}
 
 	if err := os.Rename(tempFile, filename); err != nil {
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 
-	fmt.Println("\nDownload complete!")
+	fmt.Println("[OK] Download complete!")
 	return nil
 }

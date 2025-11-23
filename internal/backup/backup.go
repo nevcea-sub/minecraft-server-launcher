@@ -20,23 +20,23 @@ func PerformBackup(worlds []string, retentionCount int) error {
 
 	existingWorlds := filterExistingWorlds(worlds)
 	if len(existingWorlds) == 0 {
-		fmt.Println("No worlds found to backup. Skipping backup.")
+		fmt.Println("[INFO] No worlds found to backup, skipping")
 		return nil
 	}
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
 	backupFile := filepath.Join(BackupDir, fmt.Sprintf("backup-%s.zip", timestamp))
 
-	fmt.Printf("Creating backup: %s\n", backupFile)
+	fmt.Printf("[INFO] Creating backup: %s\n", backupFile)
 
 	if err := createZip(backupFile, existingWorlds); err != nil {
 		return err
 	}
 
-	fmt.Println("Backup created successfully.")
+	fmt.Println("[OK] Backup created successfully")
 
 	if err := rotateBackups(retentionCount); err != nil {
-		fmt.Printf("Warning: Failed to rotate backups: %v\n", err)
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to rotate backups: %v\n", err)
 	}
 
 	return nil
@@ -69,17 +69,17 @@ func createZip(targetFile string, worlds []string) error {
 		}
 
 		err := filepath.Walk(world, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
+		if err != nil {
+			return fmt.Errorf("failed to walk directory: %w", err)
+		}
 
-			if info.Name() == "session.lock" {
+		if info.Name() == "session.lock" {
 				return nil
 			}
 
 			header, err := zip.FileInfoHeader(info)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create zip header: %w", err)
 			}
 
 			header.Name = filepath.ToSlash(path)
@@ -92,7 +92,7 @@ func createZip(targetFile string, worlds []string) error {
 
 			writer, err := archive.CreateHeader(header)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create zip entry: %w", err)
 			}
 
 			if info.IsDir() {
@@ -101,11 +101,11 @@ func createZip(targetFile string, worlds []string) error {
 
 			file, err := os.Open(path)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to open file: %w", err)
 			}
-			defer file.Close()
 
 			_, err = io.Copy(writer, file)
+			file.Close()
 			return err
 		})
 
@@ -120,7 +120,7 @@ func createZip(targetFile string, worlds []string) error {
 func rotateBackups(limit int) error {
 	files, err := os.ReadDir(BackupDir)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read backup directory: %w", err)
 	}
 
 	var backups []os.DirEntry
@@ -134,18 +134,16 @@ func rotateBackups(limit int) error {
 		return nil
 	}
 
-	// Sort by name (timestamp) ascending
 	sort.Slice(backups, func(i, j int) bool {
 		return backups[i].Name() < backups[j].Name()
 	})
 
-	// Delete oldest
 	toDelete := len(backups) - limit
 	for i := 0; i < toDelete; i++ {
 		path := filepath.Join(BackupDir, backups[i].Name())
-		fmt.Printf("Deleting old backup: %s\n", backups[i].Name())
+		fmt.Printf("[INFO] Deleting old backup: %s\n", backups[i].Name())
 		if err := os.Remove(path); err != nil {
-			return err
+			return fmt.Errorf("failed to remove backup file: %w", err)
 		}
 	}
 

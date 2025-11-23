@@ -72,7 +72,7 @@ func Load(path string) (*Config, error) {
 		if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
 			return nil, fmt.Errorf("failed to create config: %w", err)
 		}
-		fmt.Println("Created config.yaml with default settings.")
+		fmt.Println("[INFO] Created config.yaml with default settings")
 	}
 
 	var cfg Config
@@ -98,16 +98,16 @@ func Load(path string) (*Config, error) {
 	if v := os.Getenv("WORK_DIR"); v != "" {
 		cfg.WorkDir = v
 	}
-	
+
 	if v := os.Getenv("MIN_RAM"); v != "" {
 		var minRAM int
-		if _, err := fmt.Sscanf(v, "%d", &minRAM); err == nil {
+		if _, err := fmt.Sscanf(v, "%d", &minRAM); err == nil && minRAM > 0 {
 			cfg.MinRAM = minRAM
 		}
 	}
 	if v := os.Getenv("MAX_RAM"); v != "" {
 		var maxRAM int
-		if _, err := fmt.Sscanf(v, "%d", &maxRAM); err == nil {
+		if _, err := fmt.Sscanf(v, "%d", &maxRAM); err == nil && maxRAM >= 0 {
 			cfg.MaxRAM = maxRAM
 		}
 	}

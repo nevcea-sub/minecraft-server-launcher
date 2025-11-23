@@ -55,17 +55,72 @@ func CheckJava() (string, error) {
 		return "", fmt.Errorf("Java is not installed or not in PATH")
 	}
 
-	version := extractJavaVersion(string(output))
-	return version, nil
+	versionStr := extractJavaVersion(string(output))
+	if versionStr == "unknown" {
+		return "", fmt.Errorf("failed to parse Java version from output")
+	}
+
+	version, err := parseJavaVersion(versionStr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse Java version: %w", err)
+	}
+
+	if version < minJavaVersion {
+		return "", fmt.Errorf("Java %d or higher is required, found Java %d", minJavaVersion, version)
+	}
+
+	return versionStr, nil
+}
+
+func parseJavaVersion(versionStr string) (int, error) {
+	versionStr = strings.TrimSpace(versionStr)
+
+	parts := strings.Split(versionStr, ".")
+	if len(parts) == 0 {
+		return 0, fmt.Errorf("invalid version format: %s", versionStr)
+	}
+
+	majorStr := parts[0]
+	if majorStr == "1" && len(parts) > 1 {
+		majorStr = parts[1]
+	}
+
+	majorStr = strings.TrimFunc(majorStr, func(r rune) bool {
+		return (r < '0' || r > '9')
+	})
+
+	var major int
+	if _, err := fmt.Sscanf(majorStr, "%d", &major); err != nil {
+		return 0, fmt.Errorf("invalid version number: %s (from %s)", majorStr, versionStr)
+	}
+
+	if major <= 0 {
+		return 0, fmt.Errorf("invalid major version: %d (from %s)", major, versionStr)
+	}
+
+	return major, nil
 }
 
 func extractJavaVersion(output string) string {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
-		if strings.Contains(line, "version") {
-			parts := strings.Split(line, "\"")
-			if len(parts) >= 2 {
-				return parts[1]
+		line = strings.TrimSpace(line)
+		if strings.Contains(strings.ToLower(line), "version") {
+			startIdx := strings.Index(line, "\"")
+			if startIdx >= 0 {
+				endIdx := strings.Index(line[startIdx+1:], "\"")
+				if endIdx >= 0 {
+					return line[startIdx+1 : startIdx+1+endIdx]
+				}
+			}
+			parts := strings.Fields(line)
+			for _, part := range parts {
+				if strings.HasPrefix(part, "1.") || (len(part) > 0 && part[0] >= '1' && part[0] <= '9') {
+					part = strings.Trim(part, "\"")
+					if len(part) > 0 {
+						return part
+					}
+				}
 			}
 		}
 	}
@@ -96,7 +151,7 @@ func CalculateSmartRAM(configMax, percentage, minRAM int) int {
 
 	if configMax > 0 {
 		if configMax > available {
-			fmt.Printf("Warning: Configured MaxRAM (%dGB) is greater than available system RAM (%dGB). Adjusting to safe limit.\n", configMax, available-1)
+			fmt.Fprintf(os.Stderr, "[WARN] Configured MaxRAM (%dGB) exceeds available RAM (%dGB), adjusting to safe limit\n", configMax, available-1)
 			safe := available - 1
 			if safe < minRAM {
 				return minRAM
@@ -127,12 +182,12 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, serverArgs []str
 
 	if useZGC {
 		if maxRAM < 4 {
-			fmt.Println("Warning: ZGC is enabled but MaxRAM is low (< 4GB). G1GC might perform better.")
+			fmt.Fprintf(os.Stderr, "[WARN] ZGC enabled but MaxRAM < 4GB, G1GC may perform better\n")
 		}
-		fmt.Println("Using Z Garbage Collector (ZGC)")
+		fmt.Println("[INFO] Using Z Garbage Collector (ZGC)")
 		args = append(args, zgcFlags...)
 	} else {
-		fmt.Println("Using G1 Garbage Collector (G1GC)")
+		fmt.Println("[INFO] Using G1 Garbage Collector (G1GC)")
 		args = append(args, aikarFlags...)
 	}
 

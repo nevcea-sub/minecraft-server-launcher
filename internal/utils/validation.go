@@ -60,7 +60,7 @@ func ValidateJarFile(jarPath string) error {
 	}
 
 	if !hasManifest {
-		fmt.Printf("Warning: JAR file missing META-INF/MANIFEST.MF: %s\n", jarPath)
+		fmt.Fprintf(os.Stderr, "[WARN] JAR file missing META-INF/MANIFEST.MF: %s\n", jarPath)
 	}
 
 	return nil
@@ -68,18 +68,18 @@ func ValidateJarFile(jarPath string) error {
 
 func ValidateJarAndCalculateChecksum(jarPath string) (string, error) {
 	if err := ValidateJarFile(jarPath); err != nil {
-		return "", err
+		return "", fmt.Errorf("JAR validation failed: %w", err)
 	}
 
 	file, err := os.Open(jarPath)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open JAR file: %w", err)
 	}
 	defer file.Close()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, file); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to calculate checksum: %w", err)
 	}
 
 	return hex.EncodeToString(h.Sum(nil)), nil
@@ -92,13 +92,13 @@ func ValidateChecksum(jarPath, expectedChecksum string) error {
 
 	file, err := os.Open(jarPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open JAR file: %w", err)
 	}
 	defer file.Close()
 
 	h := sha256.New()
 	if _, err := io.Copy(h, file); err != nil {
-		return err
+		return fmt.Errorf("failed to calculate checksum: %w", err)
 	}
 
 	actual := hex.EncodeToString(h.Sum(nil))
@@ -117,12 +117,18 @@ func LoadChecksumFile(path string) (string, error) {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
-		return "", err
+		return "", fmt.Errorf("failed to read checksum file: %w", err)
 	}
 
 	checksum := strings.TrimSpace(string(data))
 	if len(checksum) != 64 {
-		return "", nil
+		return "", fmt.Errorf("invalid checksum format: expected 64 characters, got %d", len(checksum))
+	}
+
+	for _, c := range checksum {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return "", fmt.Errorf("invalid checksum format: contains non-hexadecimal characters")
+		}
 	}
 
 	return checksum, nil

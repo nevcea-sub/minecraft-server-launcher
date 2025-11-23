@@ -11,7 +11,7 @@ import (
 func FindJarFile() (string, error) {
 	files, err := filepath.Glob("paper-*.jar")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to search for JAR files: %w", err)
 	}
 
 	for _, file := range files {
@@ -25,7 +25,7 @@ func FindJarFile() (string, error) {
 
 func HandleEULA() error {
 	eulaFile := "eula.txt"
-	
+
 	if data, err := os.ReadFile(eulaFile); err == nil {
 		content := string(data)
 		if strings.Contains(content, "eula=true") {
@@ -42,7 +42,7 @@ eula=true
 		return fmt.Errorf("failed to write eula.txt: %w", err)
 	}
 
-	fmt.Println("Automatically accepted Minecraft EULA")
+	fmt.Println("[INFO] Automatically accepted Minecraft EULA")
 	return nil
 }
 

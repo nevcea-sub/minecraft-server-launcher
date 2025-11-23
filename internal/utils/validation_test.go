@@ -95,6 +95,33 @@ func TestLoadAndSaveChecksumFile(t *testing.T) {
 	}
 }
 
+func TestLoadChecksumFileInvalid(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	shortChecksum := filepath.Join(tmpDir, "short.sha256")
+	os.WriteFile(shortChecksum, []byte("short"), 0644)
+	_, err := LoadChecksumFile(shortChecksum)
+	if err == nil {
+		t.Error("expected error for short checksum")
+	}
+
+	invalidHex := filepath.Join(tmpDir, "invalid.sha256")
+	os.WriteFile(invalidHex, []byte("gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"), 0644)
+	_, err = LoadChecksumFile(invalidHex)
+	if err == nil {
+		t.Error("expected error for invalid hex checksum")
+	}
+
+	nonexistent := filepath.Join(tmpDir, "nonexistent.sha256")
+	loaded, err := LoadChecksumFile(nonexistent)
+	if err != nil {
+		t.Errorf("unexpected error for nonexistent file: %v", err)
+	}
+	if loaded != "" {
+		t.Errorf("expected empty string, got %s", loaded)
+	}
+}
+
 func createValidJar(t *testing.T, path string) {
 	file, err := os.Create(path)
 	if err != nil {
