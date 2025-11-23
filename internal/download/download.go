@@ -6,6 +6,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
@@ -37,6 +40,36 @@ type DownloadResponse struct {
 	} `json:"downloads"`
 }
 
+func CheckUpdate(jarName string) (bool, int, string, error) {
+	re := regexp.MustCompile(`paper-(.+)-(\d+)\.jar`)
+	matches := re.FindStringSubmatch(jarName)
+	if len(matches) != 3 {
+		return false, 0, "", fmt.Errorf("invalid jar filename format: %s", jarName)
+	}
+
+	version := matches[1]
+	currentBuild, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return false, 0, "", fmt.Errorf("invalid build number: %s", matches[2])
+	}
+
+	client := &http.Client{Timeout: timeout}
+	latestBuild, err := getLatestBuild(client, apiBase, version)
+	if err != nil {
+		return false, 0, "", fmt.Errorf("failed to get latest build: %w", err)
+	}
+
+	if latestBuild > currentBuild {
+		newJarName, err := getJarName(client, apiBase, version, latestBuild)
+		if err != nil {
+			return true, latestBuild, "", fmt.Errorf("failed to get new jar name: %w", err)
+		}
+		return true, latestBuild, newJarName, nil
+	}
+
+	return false, 0, "", nil
+}
+
 func DownloadJar(version string) (string, error) {
 	client := &http.Client{Timeout: timeout}
 
@@ -56,6 +89,12 @@ func DownloadJar(version string) (string, error) {
 	jarName, err := getJarName(client, apiBase, version, build)
 	if err != nil {
 		return "", err
+	}
+
+	tempFile := jarName + ".part"
+	if _, err := os.Stat(tempFile); err == nil {
+		fmt.Printf("Found incomplete download %s, removing...\n", tempFile)
+		os.Remove(tempFile)
 	}
 
 	if _, err := os.Stat(jarName); err == nil {
@@ -179,15 +218,30 @@ func downloadFile(client *http.Client, url, filename string) error {
 	}
 
 	tempFile := filename + ".part"
+	
+	if _, err := os.Stat(tempFile); err == nil {
+		os.Remove(tempFile)
+	}
+
 	out, err := os.Create(tempFile)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 
+	var closed bool
+	defer func() {
+		if !closed {
+			out.Close()
+		}
+	}()
+
 	success := false
 	defer func() {
-		out.Close()
 		if !success {
+			if !closed {
+				out.Close()
+				closed = true
+			}
 			os.Remove(tempFile)
 		}
 	}()
@@ -203,7 +257,15 @@ func downloadFile(client *http.Client, url, filename string) error {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
 
+	out.Close()
+	closed = true
+
 	success = true
+	
+	if _, err := os.Stat(filename); err == nil {
+		os.Remove(filename)
+	}
+
 	if err := os.Rename(tempFile, filename); err != nil {
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}

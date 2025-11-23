@@ -39,6 +39,15 @@ var aikarFlags = []string{
 	"-Dfile.encoding=UTF-8",
 }
 
+var zgcFlags = []string{
+	"-XX:+UseZGC",
+	"-XX:+ZGenerational",
+	"-XX:+DisableExplicitGC",
+	"-XX:+AlwaysPreTouch",
+	"-XX:+PerfDisableSharedMem",
+	"-Dfile.encoding=UTF-8",
+}
+
 func CheckJava() (string, error) {
 	cmd := exec.Command(javaCmd, "-version")
 	output, err := cmd.CombinedOutput()
@@ -63,45 +72,70 @@ func extractJavaVersion(output string) string {
 	return "unknown"
 }
 
-func GetTotalRAMGB() int {
+func GetSystemRAM() (totalGB int, availableGB int, err error) {
 	if runtime.GOOS == "windows" || runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
 		v, err := mem.VirtualMemory()
-		if err == nil {
-			return int(v.Total / (1024 * 1024 * 1024))
+		if err != nil {
+			return 0, 0, err
 		}
+		totalGB = int(v.Total / (1024 * 1024 * 1024))
+		availableGB = int(v.Available / (1024 * 1024 * 1024))
+		return totalGB, availableGB, nil
 	}
-	return 0
+	return 0, 0, fmt.Errorf("unsupported OS")
 }
 
-func CalculateMaxRAM(configMax, totalRAM, minRAM int) int {
-	if totalRAM <= 0 {
+func CalculateSmartRAM(configMax, percentage, minRAM int) int {
+	_, available, err := GetSystemRAM()
+	if err != nil {
+		if configMax > 0 {
+			return configMax
+		}
+		return minRAM + 2
+	}
+
+	if configMax > 0 {
+		if configMax > available {
+			fmt.Printf("Warning: Configured MaxRAM (%dGB) is greater than available system RAM (%dGB). Adjusting to safe limit.\n", configMax, available-1)
+			safe := available - 1
+			if safe < minRAM {
+				return minRAM
+			}
+			return safe
+		}
 		return configMax
 	}
 
-	reserved := 2
-	if totalRAM > 16 {
-		reserved = 4
+	calculated := int(float64(available) * (float64(percentage) / 100.0))
+
+	if available-calculated < 1 {
+		calculated = available - 1
 	}
 
-	available := totalRAM - reserved
-	if available < minRAM {
+	if calculated < minRAM {
 		return minRAM
 	}
 
-	if configMax > available {
-		return available
-	}
-
-	return configMax
+	return calculated
 }
 
-func RunServer(jarFile string, minRAM, maxRAM int, serverArgs []string) error {
+func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, serverArgs []string) error {
 	args := []string{
 		fmt.Sprintf("-Xms%dG", minRAM),
 		fmt.Sprintf("-Xmx%dG", maxRAM),
 	}
 
-	args = append(args, aikarFlags...)
+	if useZGC {
+		if maxRAM < 4 {
+			fmt.Println("Warning: ZGC is enabled but MaxRAM is low (< 4GB). G1GC might perform better.")
+		}
+		fmt.Println("Using Z Garbage Collector (ZGC)")
+		args = append(args, zgcFlags...)
+	} else {
+		fmt.Println("Using G1 Garbage Collector (G1GC)")
+		args = append(args, aikarFlags...)
+	}
+
 	args = append(args, "-jar", jarFile)
 	args = append(args, serverArgs...)
 
@@ -110,10 +144,13 @@ func RunServer(jarFile string, minRAM, maxRAM int, serverArgs []string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("server stopped with error: %w", err)
 	}
 
 	return nil
 }
-

@@ -42,7 +42,7 @@ eula=true
 		return fmt.Errorf("failed to write eula.txt: %w", err)
 	}
 
-	fmt.Println("Accepted Minecraft EULA")
+	fmt.Println("Automatically accepted Minecraft EULA")
 	return nil
 }
 
