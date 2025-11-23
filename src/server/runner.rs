@@ -31,8 +31,8 @@ const JAVA_ARGS: &[&str] = &[
 pub fn run_server(jar_file: &str, min_ram: u32, max_ram: u32, server_args: &[String]) -> Result<()> {
     let mut cmd = Command::new(JAVA_CMD);
     
-    let min_ram_arg = format!("{}{}{}", JAVA_XMS_PREFIX, min_ram, RAM_UNIT);
-    let max_ram_arg = format!("{}{}{}", JAVA_XMX_PREFIX, max_ram, RAM_UNIT);
+    let min_ram_arg = format!("{JAVA_XMS_PREFIX}{min_ram}{RAM_UNIT}");
+    let max_ram_arg = format!("{JAVA_XMX_PREFIX}{max_ram}{RAM_UNIT}");
     
     cmd.arg(&min_ram_arg)
         .arg(&max_ram_arg)
@@ -48,13 +48,13 @@ pub fn run_server(jar_file: &str, min_ram: u32, max_ram: u32, server_args: &[Str
         Ok(status) => {
             if let Some(code) = status.code() {
                 if code != 0 {
-                    warn!("Server stopped with exit code: {}", code);
+                    warn!("Server stopped with exit code: {code}");
                 }
             }
         }
         Err(e) => {
-            error!("Failed to start server: {}", e);
-            anyhow::bail!("Failed to start server: {}", e);
+            error!("Failed to start server: {e}");
+            anyhow::bail!("Failed to start server: {e}");
         }
     }
 
@@ -67,7 +67,7 @@ mod tests {
 
     #[test]
     fn test_java_args_count() {
-        assert!(JAVA_ARGS.len() > 0);
+        assert!(JAVA_ARGS.len() > 10);
     }
 
     #[test]

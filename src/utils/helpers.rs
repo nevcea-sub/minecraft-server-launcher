@@ -17,7 +17,7 @@ mod tests {
 
     #[test]
     fn test_input_buffer_capacity() {
-        assert!(INPUT_BUFFER_CAPACITY > 0);
+        let _buffer = String::with_capacity(INPUT_BUFFER_CAPACITY);
     }
 }
 

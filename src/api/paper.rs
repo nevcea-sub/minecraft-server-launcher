@@ -86,8 +86,8 @@ mod tests {
         let response: Result<PaperBuildsResponse, _> = serde_json::from_str(json);
         assert!(response.is_ok());
         let response = response.unwrap();
-        assert_eq!(response.builds[0].build, 999999);
-        assert_eq!(response.builds[1].build, 1000000);
+        assert_eq!(response.builds[0].build, 999_999);
+        assert_eq!(response.builds[1].build, 1_000_000);
     }
 
     #[test]
@@ -101,8 +101,8 @@ mod tests {
 
     #[test]
     fn test_paper_project_many_versions() {
-        let versions: Vec<String> = (1..=100).map(|i| format!("1.21.{}", i)).collect();
-        let json = format!(r#"{{"versions": {:?}}}"#, versions);
+        let versions: Vec<String> = (1..=100).map(|i| format!("1.21.{i}")).collect();
+        let json = format!(r#"{{"versions": {versions:?}}}"#);
         let project: Result<PaperProject, _> = serde_json::from_str(&json);
         assert!(project.is_ok());
         assert_eq!(project.unwrap().versions.len(), 100);

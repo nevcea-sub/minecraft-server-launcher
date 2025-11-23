@@ -31,10 +31,10 @@ fn main() {
         .init();
 
     if let Err(e) = run() {
-        let error_msg = e.to_string();
-        if !error_msg.contains("Cannot start server without JAR file") {
-            error!("Fatal error: {}", e);
-            eprintln!("\n[ERROR] {}", e);
+        let error_str = e.to_string();
+        if !error_str.contains("Cannot start server without JAR file") {
+            error!("Fatal error: {e}");
+            eprintln!("\n[ERROR] {e}");
         }
         let _ = pause();
         std::process::exit(1);
@@ -57,15 +57,15 @@ fn run() -> Result<()> {
 fn setup_working_directory() -> Result<Config> {
     let exe_dir = get_exe_directory()?;
     std::env::set_current_dir(&exe_dir)
-        .with_context(|| format!("Failed to change to executable directory: {:?}", exe_dir))?;
+        .with_context(|| format!("Failed to change to executable directory: {}", exe_dir.display()))?;
 
     let config = Config::load()?;
     let work_dir = config.work_directory();
     
     if work_dir != Path::new(CURRENT_DIR) {
         std::env::set_current_dir(&work_dir)
-            .with_context(|| format!("Failed to change to work directory: {:?}", work_dir))?;
-        info!("Changed working directory to: {:?}", work_dir);
+            .with_context(|| format!("Failed to change to work directory: {}", work_dir.display()))?;
+        info!("Changed working directory to: {}", work_dir.display());
     }
     
     Ok(config)
@@ -73,23 +73,21 @@ fn setup_working_directory() -> Result<Config> {
 
 fn check_prerequisites(_config: &Config) -> Result<()> {
     let java_version = check_java()?;
-    info!("Java version: {}", java_version);
+    info!("Java version: {java_version}");
     
-    let total_ram_gb = get_total_ram_gb()?;
+    let total_ram_gb = get_total_ram_gb();
     if let Some(ram) = total_ram_gb {
-        info!("Total system RAM: {} GB", ram);
+        info!("Total system RAM: {ram} GB");
     }
     
     Ok(())
 }
 
 fn ensure_jar_file(mut config: Config) -> Result<(String, Config)> {
-    match find_jar_file()? {
-        Some(jar) => {
-            info!("Found JAR file: {}", jar);
-            Ok((jar, config))
-        }
-        None => {
+    if let Some(jar) = find_jar_file()? {
+        info!("Found JAR file: {jar}");
+        Ok((jar, config))
+    } else {
             let was_auto_created = config.auto_created;
             config.reload()?;
             config.auto_created = was_auto_created;
@@ -115,7 +113,6 @@ fn ensure_jar_file(mut config: Config) -> Result<(String, Config)> {
             }
         }
     }
-}
 
 fn cleanup_auto_created_config(config: &Config) -> Result<()> {
     if config.auto_created {
@@ -132,11 +129,11 @@ fn cleanup_auto_created_config(config: &Config) -> Result<()> {
 fn start_server(jar_file: &str, mut config: Config) -> Result<()> {
     config.reload()?;
     
-    let total_ram_gb = get_total_ram_gb()?;
+    let total_ram_gb = get_total_ram_gb();
     let max_ram = calculate_max_ram(config.max_ram, total_ram_gb, config.min_ram);
     
     info!("Starting server with {}G - {}G RAM", config.min_ram, max_ram);
-    info!("JAR file: {}", jar_file);
+    info!("JAR file: {jar_file}");
     
     run_server(jar_file, config.min_ram, max_ram, &config.server_args)?;
     Ok(())

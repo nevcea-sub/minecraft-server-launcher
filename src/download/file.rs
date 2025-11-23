@@ -26,12 +26,12 @@ pub fn download_file(url: &str, file_path: &Path, _display_name: &str) -> Result
     let mut response = get_client()?
         .get(url)
         .send()
-        .with_context(|| format!("Failed to download from {}", url))?;
+        .with_context(|| format!("Failed to download from {url}"))?;
     
     pb.set_length(response.content_length().unwrap_or(0));
 
     let file = File::create(file_path)
-        .with_context(|| format!("Failed to create file: {:?}", file_path))?;
+        .with_context(|| format!("Failed to create file: {}", file_path.display()))?;
     
     let mut writer = BufWriter::with_capacity(DOWNLOAD_BUFFER_SIZE, file);
     let mut downloaded = 0u64;

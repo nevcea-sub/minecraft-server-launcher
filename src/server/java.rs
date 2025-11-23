@@ -23,8 +23,7 @@ pub fn check_java() -> Result<String> {
             if let Ok(version_num) = version_str.parse::<u32>() {
                 if version_num < MIN_JAVA_VERSION {
                     warn!(
-                        "Java version {} detected. Minecraft 1.18+ requires Java {} or higher. The server may not start correctly.",
-                        version, MIN_JAVA_VERSION
+                        "Java version {version} detected. Minecraft 1.18+ requires Java {MIN_JAVA_VERSION} or higher. The server may not start correctly."
                     );
                 }
             }
@@ -40,7 +39,7 @@ fn extract_java_version(output: &str) -> String {
             return version;
         }
     }
-    VERSION_UNKNOWN.to_string()
+    String::from(VERSION_UNKNOWN)
 }
 
 fn extract_version_from_line(line: &str) -> Option<String> {

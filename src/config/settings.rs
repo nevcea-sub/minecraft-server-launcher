@@ -3,7 +3,10 @@ use serde::{Deserialize, Serialize};
 use anyhow::{Context, Result};
 use log::warn;
 
-use crate::constants::*;
+use crate::constants::{
+    CONFIG_FILE, CURRENT_DIR, DEFAULT_MAX_RAM, DEFAULT_MIN_RAM, DEFAULT_SERVER_ARG,
+    DEFAULT_VERSION, ENV_MAX_RAM, ENV_MIN_RAM, ENV_MINECRAFT_VERSION, ENV_WORK_DIR,
+};
 
 const CONFIG_EXAMPLE: &str = r#"# Minecraft Server Launcher Configuration
 # Edit this file to customize server settings
@@ -39,10 +42,10 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            minecraft_version: DEFAULT_VERSION.to_string(),
+            minecraft_version: String::from(DEFAULT_VERSION),
             min_ram: DEFAULT_MIN_RAM,
             max_ram: DEFAULT_MAX_RAM,
-            server_args: vec![DEFAULT_SERVER_ARG.to_string()],
+            server_args: vec![String::from(DEFAULT_SERVER_ARG)],
             work_dir: None,
             auto_created: false,
         }
@@ -55,8 +58,7 @@ impl Config {
     }
 
     pub fn load_from_path(config_path: &Path) -> Result<Self> {
-        let was_created = !config_path.exists();
-        let config = if !was_created {
+        let config = if config_path.exists() {
             toml::from_str(&std::fs::read_to_string(config_path)
                 .context("Failed to read config.toml")?)
                 .context("Failed to parse config.toml")?
@@ -64,9 +66,9 @@ impl Config {
             std::fs::write(config_path, CONFIG_EXAMPLE)
                 .context("Failed to create config.toml")?;
             println!("Created config.toml with default settings. Edit it to customize.");
-            Config {
+            Self {
                 auto_created: true,
-                ..Config::default()
+                ..Self::default()
             }
         };
 
@@ -141,8 +143,7 @@ impl Config {
     pub fn work_directory(&self) -> PathBuf {
         self.work_dir
             .as_deref()
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(CURRENT_DIR))
+            .map_or_else(|| PathBuf::from(CURRENT_DIR), PathBuf::from)
     }
 }
 
@@ -164,31 +165,43 @@ mod tests {
 
     #[test]
     fn test_config_validate() {
-        let mut config = Config::default();
-        config.min_ram = 4;
-        config.max_ram = 2;
+        let config = Config {
+            min_ram: 4,
+            max_ram: 2,
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
 
-        config.min_ram = 0;
-        config.max_ram = 4;
+        let config = Config {
+            min_ram: 0,
+            max_ram: 4,
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
 
-        config.min_ram = 2;
-        config.max_ram = 4;
+        let config = Config {
+            min_ram: 2,
+            max_ram: 4,
+            ..Config::default()
+        };
         assert!(config.validate().is_ok());
     }
 
     #[test]
     fn test_config_validate_empty_version() {
-        let mut config = Config::default();
-        config.minecraft_version = String::new();
+        let config = Config {
+            minecraft_version: String::new(),
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn test_config_validate_max_ram_limit() {
-        let mut config = Config::default();
-        config.max_ram = crate::constants::MAX_RAM_LIMIT + 1;
+        let config = Config {
+            max_ram: crate::constants::MAX_RAM_LIMIT + 1,
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
     }
 
@@ -197,8 +210,10 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.work_directory(), PathBuf::from("."));
 
-        let mut config = Config::default();
-        config.work_dir = Some("./server".to_string());
+        let config = Config {
+            work_dir: Some("./server".to_string()),
+            ..Config::default()
+        };
         assert_eq!(config.work_directory(), PathBuf::from("./server"));
     }
 
@@ -349,33 +364,48 @@ server_args = ["nogui", "test"]
 
     #[test]
     fn test_config_validate_boundary_values() {
-        let mut config = Config::default();
-        config.min_ram = 1;
-        config.max_ram = crate::constants::MAX_RAM_LIMIT;
+        let config = Config {
+            min_ram: 1,
+            max_ram: crate::constants::MAX_RAM_LIMIT,
+            ..Config::default()
+        };
         assert!(config.validate().is_ok());
 
-        config.max_ram = crate::constants::MAX_RAM_LIMIT + 1;
+        let config = Config {
+            max_ram: crate::constants::MAX_RAM_LIMIT + 1,
+            ..Config::default()
+        };
         assert!(config.validate().is_err());
     }
 
     #[test]
     fn test_config_validate_equal_min_max() {
-        let mut config = Config::default();
-        config.min_ram = 4;
-        config.max_ram = 4;
+        let config = Config {
+            min_ram: 4,
+            max_ram: 4,
+            ..Config::default()
+        };
         assert!(config.validate().is_ok());
     }
 
     #[test]
     fn test_config_work_directory_edge_cases() {
-        let mut config = Config::default();
-        config.work_dir = Some(String::new());
+        let config = Config {
+            work_dir: Some(String::new()),
+            ..Config::default()
+        };
         assert_eq!(config.work_directory(), PathBuf::from(""));
 
-        config.work_dir = Some("/absolute/path".to_string());
+        let config = Config {
+            work_dir: Some("/absolute/path".to_string()),
+            ..Config::default()
+        };
         assert_eq!(config.work_directory(), PathBuf::from("/absolute/path"));
 
-        config.work_dir = Some("../relative/path".to_string());
+        let config = Config {
+            work_dir: Some("../relative/path".to_string()),
+            ..Config::default()
+        };
         assert_eq!(config.work_directory(), PathBuf::from("../relative/path"));
     }
 }

@@ -11,29 +11,27 @@ fn init_client() -> Result<Client, String> {
     Client::builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))
+        .map_err(|e| format!("Failed to create HTTP client: {e}"))
 }
 
 pub fn get_client() -> Result<&'static Client> {
     HTTP_CLIENT
-        .get_or_init(|| init_client())
+        .get_or_init(init_client)
         .as_ref()
-        .map_err(|e| anyhow::anyhow!("{}", e))
+        .map_err(|e| anyhow::anyhow!("{e}"))
 }
 
 pub fn check_api_response(response: Response, context: &str) -> Result<String> {
     let status = response.status();
     if !status.is_success() {
         let error_text = response.text()
-            .unwrap_or_else(|_| format!("Failed to read error response body (status: {})", status));
+            .unwrap_or_else(|_| format!("Failed to read error response body (status: {status})"));
+        let error_preview: String = error_text.chars().take(200).collect();
         anyhow::bail!(
-            "API returned status {} for {}: {}",
-            status,
-            context,
-            error_text.chars().take(200).collect::<String>()
+            "API returned status {status} for {context}: {error_preview}"
         );
     }
-    response.text().with_context(|| format!("Failed to read {} response body", context))
+    response.text().with_context(|| format!("Failed to read {context} response body"))
 }
 
 pub fn parse_json_with_error_handling<T: serde::de::DeserializeOwned>(
@@ -41,8 +39,9 @@ pub fn parse_json_with_error_handling<T: serde::de::DeserializeOwned>(
     context: &str,
 ) -> Result<T> {
     serde_json::from_str(text).with_context(|| {
-        warn!("Failed to parse {} JSON. Response: {}", context, text.chars().take(ERROR_PREVIEW_LENGTH).collect::<String>());
-        format!("Failed to parse {} JSON. API may have changed.", context)
+        let preview: String = text.chars().take(ERROR_PREVIEW_LENGTH).collect();
+        warn!("Failed to parse {context} JSON. Response: {preview}");
+        format!("Failed to parse {context} JSON. API may have changed.")
     })
 }
 

@@ -1,5 +1,5 @@
-pub mod download;
+pub mod file;
 pub mod http;
 
-pub use download::download_file;
+pub use file::download_file;
 

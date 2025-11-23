@@ -17,7 +17,7 @@ pub fn find_jar_file() -> Result<Option<String>> {
             if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                 if name.starts_with(JAR_PREFIX) && name.ends_with(JAR_EXTENSION) {
                     if let Err(e) = validate_jar_file(&path) {
-                        warn!("Found JAR file '{}' but validation failed: {}. Skipping.", name, e);
+                        warn!("Found JAR file '{name}' but validation failed: {e}. Skipping.");
                         continue;
                     }
                     return Ok(Some(name.to_string()));
@@ -29,7 +29,7 @@ pub fn find_jar_file() -> Result<Option<String>> {
 }
 
 pub fn download_jar(version: &str) -> Result<String> {
-    let version_str = if version == DEFAULT_VERSION {
+    let version_str: String = if version == DEFAULT_VERSION {
         let response = get_client()?
             .get(API_BASE)
             .send()
@@ -43,20 +43,20 @@ pub fn download_jar(version: &str) -> Result<String> {
             .ok_or_else(|| anyhow::anyhow!("No versions found"))?
             .clone()
     } else {
-        version.to_string()
+        String::from(version)
     };
 
-    let builds_url = format!("{}/versions/{}/builds", API_BASE, version_str);
+    let builds_url = format!("{API_BASE}/versions/{version_str}/builds");
     let response = get_client()?
         .get(&builds_url)
         .send()
-        .with_context(|| format!("Failed to fetch builds for version {}", version_str))?;
+        .with_context(|| format!("Failed to fetch builds for version {version_str}"))?;
     
     let text = check_api_response(response, "builds")?;
     let builds_response: PaperBuildsResponse = parse_json_with_error_handling(&text, "builds")?;
     
     let latest_build = builds_response.builds.last()
-        .ok_or_else(|| anyhow::anyhow!("No builds found for version {}", version_str))?;
+        .ok_or_else(|| anyhow::anyhow!("No builds found for version {version_str}"))?;
 
     let download_info_url = format!(
         "{}/versions/{}/builds/{}",
@@ -76,9 +76,9 @@ pub fn download_jar(version: &str) -> Result<String> {
     
     if jar_path.exists() {
         validate_jar_file(jar_path)
-            .with_context(|| format!("Existing JAR file failed validation: {}", jar_name))?;
-        info!("Validated existing JAR file: {}", jar_name);
-        return Ok(jar_name.clone());
+            .with_context(|| format!("Existing JAR file failed validation: {jar_name}"))?;
+        info!("Validated existing JAR file: {jar_name}");
+        return Ok(jar_name.to_string());
     }
 
     let download_url = format!(
@@ -89,10 +89,10 @@ pub fn download_jar(version: &str) -> Result<String> {
     download_file(&download_url, jar_path, jar_name)?;
     
     validate_jar_file(jar_path)
-        .with_context(|| format!("Downloaded JAR file failed validation: {}", jar_name))?;
-    info!("Validated downloaded JAR file: {}", jar_name);
+        .with_context(|| format!("Downloaded JAR file failed validation: {jar_name}"))?;
+    info!("Validated downloaded JAR file: {jar_name}");
     
-    Ok(jar_name.clone())
+    Ok(jar_name.to_string())
 }
 
 #[cfg(test)]
