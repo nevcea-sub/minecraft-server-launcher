@@ -19,6 +19,12 @@ A fast and reliable Minecraft Paper server launcher written in Rust. This launch
 
 ## Installation
 
+### Download from GitHub Releases (Recommended)
+
+1. Go to the [Releases](https://github.com/nevcea-sub/minecraft-server-launcher/releases) page
+2. Download the latest `paper-launcher.exe` file
+3. Run the executable
+
 ### Building from Source
 
 1. Install [Rust](https://www.rust-lang.org/tools/install) (1.70 or later)
