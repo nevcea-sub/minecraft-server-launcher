@@ -1,0 +1,49 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Minecraft Server Files
+*.jar
+config.toml
+eula.txt
+server.properties
+logs/
+world/
+world_nether/
+world_the_end/
+plugins/
+crash-reports/
+usercache.json
+banned-ips.json
+banned-players.json
+ops.json
+whitelist.json
+bukkit.yml
+spigot.yml
+paper-global.yml
+paper-world-defaults.yml
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+*.tmp
+*.temp
+*.log
