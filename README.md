@@ -91,36 +91,16 @@ export MAX_RAM=8
 - 🔒 **SHA-256 Checksum Validation**: JAR files verified against SHA-256 checksums (cached in `.jar.sha256`)
 - ✅ **JAR Integrity Verification**: Validates ZIP structure, magic numbers, and manifest
 
-## Performance Benchmarks
+## Performance
 
-### Checksum Validation Performance
+| Operation | Time | Improvement |
+|-----------|------|-------------|
+| JAR validation + checksum (integrated) | ~190µs | **22% faster** |
+| JAR validation only | ~185µs | **12.8% faster** |
+| Checksum validation (cached) | ~1µs | Cached in `.jar.sha256` |
+| Checksum validation (calculated) | ~60µs | **20% faster** |
 
-| Operation | Time | Improvement | Notes |
-|-----------|------|-------------|-------|
-| Checksum validation only | ~60µs | **20% faster** | Size-based buffer optimization |
-| Checksum calculation (1KB) | ~58µs | Stable | Optimized for small files |
-| Checksum calculation (1MB) | ~4.68ms | **3.4% faster** | Large buffer optimization |
-| Checksum calculation (10MB) | ~49ms | Stable | Efficient for large files |
-| Checksum validation (valid) | ~4.75ms | **4.5% faster** | Byte-level comparison |
-| Checksum validation (invalid) | ~4.80ms | **5.6% faster** | Early detection optimization |
-
-### JAR Validation Performance
-
-| Operation | Time | Improvement | Notes |
-|-----------|------|-------------|-------|
-| JAR validation only | ~185µs | **12.8% faster** | Optimized ZIP parsing |
-| JAR validation + checksum (integrated) | ~190µs | **22% faster** | Single file read |
-| Checksum validation only | ~60µs | **8.8% faster** | Optimized buffer selection |
-
-**Performance Comparison:**
-- **Previous**: JAR validation (185µs) + checksum validation (58µs) = **243µs**
-- **Current**: Integrated function = **190µs**
-- **Result**: **22% faster** by reading file only once
-
-> **Note**: Checksums are cached in `.jar.sha256` files. Subsequent validations only require reading the cached checksum file (~1µs) instead of recalculating the hash.
-
-### Summary
-
-- ✅ Sub-millisecond latency for typical JAR files
-- ✅ Checksum validation: **~60µs** overhead
-- ✅ Integrated validation: **22% faster** than separate operations
+**Key Optimizations:**
+- Integrated validation reads file only once (22% faster)
+- Checksum caching reduces validation to ~1µs for subsequent runs
+- Size-based buffer selection optimizes small and large files
