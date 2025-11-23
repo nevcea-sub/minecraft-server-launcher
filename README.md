@@ -5,15 +5,11 @@ A fast and reliable Minecraft Paper server launcher written in Rust. This launch
 ## Features
 
 - 🚀 **Automatic JAR Download**: Automatically downloads the latest Paper server JAR for your specified Minecraft version
-- ⚙️ **Configuration Management**: Simple TOML-based configuration file
 - 💾 **Smart RAM Management**: Automatically calculates optimal RAM allocation based on system resources
 - ☕ **Java Version Detection**: Verifies Java installation and version compatibility
 - 📝 **EULA Handling**: Automatically accepts the Minecraft EULA
-- 🔧 **Environment Variable Overrides**: Override configuration via environment variables
-- 📊 **Progress Indicators**: Visual download progress with progress bars
 - 🔒 **File Integrity Verification**: SHA-256 checksum validation with caching for downloaded JAR files
 - 🔐 **HTTPS Enforcement**: All downloads are performed over secure HTTPS connections
-- ⚡ **High Performance**: Optimized algorithms with integrated JAR validation and checksum calculation
 
 ## Requirements
 
@@ -47,74 +43,41 @@ cargo build --release
 
 ## Usage
 
-### First Run
-
-1. Run the launcher:
+Run the launcher:
 ```bash
 ./paper-launcher
 ```
 
-2. On first run, a `config.toml` file will be created with default settings. Edit it to customize your server configuration.
-
-3. If no Paper JAR file is found, the launcher will prompt you to download it automatically.
+On first run, a `config.toml` file will be created with default settings. If no Paper JAR file is found, the launcher will automatically download it.
 
 ### Configuration
 
 Edit `config.toml` to customize your server settings:
 
 ```toml
-# Minecraft version (use "latest" for the latest version)
-minecraft_version = "latest"
-
-# Minimum RAM in GB
-min_ram = 2
-
-# Maximum RAM in GB (will be auto-adjusted based on system RAM)
-max_ram = 4
-
-# Server arguments
-server_args = ["nogui"]
-
-# Working directory (optional, defaults to current directory)
-# work_dir = "./server"
+minecraft_version = "latest"  # Use "latest" for the latest version
+min_ram = 2                   # Minimum RAM in GB
+max_ram = 4                   # Maximum RAM in GB (auto-adjusted based on system RAM)
+server_args = ["nogui"]       # Server arguments
+# work_dir = "./server"       # Optional: working directory
 ```
 
 ### Command-Line Options
 
-The launcher supports various command-line options:
-
 | Option | Short | Description |
 |--------|-------|-------------|
-| `--log-level` | `-l` | Set log level: `trace`, `debug`, `info`, `warn`, `error` (default: `info`) |
-| `--verbose` | | Enable verbose logging (equivalent to `--log-level debug`) |
+| `--log-level` | `-l` | Log level: `trace`, `debug`, `info`, `warn`, `error` (default: `info`) |
+| `--verbose` | | Enable verbose logging |
 | `--quiet` | `-q` | Suppress all output except errors |
-| `--config` | `-c` | Specify custom config file path |
+| `--config` | `-c` | Custom config file path |
 | `--work-dir` | `-w` | Override working directory |
 | `--version` | `-v` | Override Minecraft version |
-| `--no-pause` | | Don't pause on exit (useful for scripts) |
-
-Examples:
-```bash
-# Run with debug logging
-./paper-launcher --verbose
-
-# Run with custom config and work directory
-./paper-launcher -c ./my-config.toml -w ./server
-
-# Run for specific version without pausing
-./paper-launcher --version 1.21.1 --no-pause
-```
+| `--no-pause` | | Don't pause on exit |
 
 ### Environment Variables
 
-You can override configuration values using environment variables:
+Override configuration via environment variables: `MINECRAFT_VERSION`, `MIN_RAM`, `MAX_RAM`, `WORK_DIR`
 
-- `MINECRAFT_VERSION`: Override the Minecraft version
-- `MIN_RAM`: Override minimum RAM (in GB)
-- `MAX_RAM`: Override maximum RAM (in GB)
-- `WORK_DIR`: Override the working directory
-
-Example:
 ```bash
 export MINECRAFT_VERSION="1.21.1"
 export MIN_RAM=4
@@ -122,12 +85,11 @@ export MAX_RAM=8
 ./paper-launcher
 ```
 
-## Security Features
+## Security
 
-- 🔐 **HTTPS Enforcement**: All downloads are performed over HTTPS only
-- 🔒 **SHA-256 Checksum Validation**: Downloaded JAR files are verified against SHA-256 checksums
-- 💾 **Checksum Caching**: Checksums are cached in `.jar.sha256` files for faster subsequent validations
-- ✅ **JAR Integrity Verification**: Validates ZIP structure, magic numbers, and manifest before use
+- 🔐 **HTTPS Enforcement**: All downloads over HTTPS only
+- 🔒 **SHA-256 Checksum Validation**: JAR files verified against SHA-256 checksums (cached in `.jar.sha256`)
+- ✅ **JAR Integrity Verification**: Validates ZIP structure, magic numbers, and manifest
 
 ## Performance Benchmarks
 
@@ -157,9 +119,8 @@ export MAX_RAM=8
 
 > **Note**: Checksums are cached in `.jar.sha256` files. Subsequent validations only require reading the cached checksum file (~1µs) instead of recalculating the hash.
 
-### Performance Summary
+### Summary
 
-- ✅ All operations maintain **sub-millisecond latency** for typical JAR files
-- ✅ Checksum validation overhead: **~60µs** (minimal impact on startup time)
-- ✅ File integrity verification adds only **~3% overhead** to JAR validation
+- ✅ Sub-millisecond latency for typical JAR files
+- ✅ Checksum validation: **~60µs** overhead
 - ✅ Integrated validation: **22% faster** than separate operations
