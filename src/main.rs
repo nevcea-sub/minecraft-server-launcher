@@ -8,6 +8,7 @@ mod utils;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
+use clap::Parser;
 use log::{error, info};
 
 use crate::config::Config;
@@ -16,6 +17,32 @@ use crate::server::{check_java, calculate_max_ram, get_total_ram_gb};
 use crate::utils::{download_jar, find_jar_file, handle_eula};
 use crate::server::run_server;
 use crate::utils::pause;
+
+#[derive(Parser, Debug)]
+#[command(name = "paper-launcher")]
+#[command(about = "A fast and reliable Minecraft Paper server launcher", long_about = None)]
+struct Cli {
+    #[arg(short, long, default_value = "info")]
+    log_level: String,
+    
+    #[arg(short, long)]
+    verbose: bool,
+    
+    #[arg(short, long)]
+    quiet: bool,
+    
+    #[arg(short, long)]
+    config: Option<String>,
+    
+    #[arg(short = 'w', long)]
+    work_dir: Option<String>,
+    
+    #[arg(short = 'v', long)]
+    version: Option<String>,
+    
+    #[arg(long)]
+    no_pause: bool,
+}
 
 fn get_exe_directory() -> Result<PathBuf> {
     std::env::current_exe()
@@ -26,23 +53,57 @@ fn get_exe_directory() -> Result<PathBuf> {
 }
 
 fn main() {
+    let cli = Cli::parse();
+    
+    let log_level = if cli.quiet {
+        log::LevelFilter::Error
+    } else if cli.verbose {
+        log::LevelFilter::Debug
+    } else {
+        match cli.log_level.to_lowercase().as_str() {
+            "trace" => log::LevelFilter::Trace,
+            "debug" => log::LevelFilter::Debug,
+            "info" => log::LevelFilter::Info,
+            "warn" => log::LevelFilter::Warn,
+            "error" => log::LevelFilter::Error,
+            _ => {
+                eprintln!("Warning: Invalid log level '{}', using 'info'", cli.log_level);
+                log::LevelFilter::Info
+            }
+        }
+    };
+    
     env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Warn)
+        .filter_level(log_level)
         .init();
 
-    if let Err(e) = run() {
+    let no_pause = cli.no_pause;
+    if let Err(e) = run(cli) {
         let error_str = e.to_string();
         if !error_str.contains("Cannot start server without JAR file") {
             error!("Fatal error: {e}");
             eprintln!("\n[ERROR] {e}");
         }
-        let _ = pause();
+        if !no_pause {
+            let _ = pause();
+        }
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<()> {
-    let config = setup_working_directory()?;
+fn run(cli: Cli) -> Result<()> {
+    let no_pause = cli.no_pause;
+    let version_override = cli.version.clone();
+    let work_dir_override = cli.work_dir.clone();
+    
+    let mut config = setup_working_directory(&cli)?;
+    
+    if let Some(version) = version_override {
+        config.minecraft_version = version;
+    }
+    if let Some(work_dir) = work_dir_override {
+        config.work_dir = Some(work_dir);
+    }
     
     check_prerequisites(&config)?;
     
@@ -50,16 +111,24 @@ fn run() -> Result<()> {
     handle_eula()?;
     
     start_server(&jar_file, config)?;
-    pause()?;
+    if !no_pause {
+        pause()?;
+    }
     Ok(())
 }
 
-fn setup_working_directory() -> Result<Config> {
+fn setup_working_directory(cli: &Cli) -> Result<Config> {
     let exe_dir = get_exe_directory()?;
     std::env::set_current_dir(&exe_dir)
         .with_context(|| format!("Failed to change to executable directory: {}", exe_dir.display()))?;
 
-    let config = Config::load()?;
+    let config = if let Some(config_path) = &cli.config {
+        Config::load_from_path(Path::new(config_path))
+            .with_context(|| format!("Failed to load config from: {}", config_path))?
+    } else {
+        Config::load()?
+    };
+    
     let work_dir = config.work_directory();
     
     if work_dir != Path::new(CURRENT_DIR) {
@@ -86,33 +155,33 @@ fn check_prerequisites(_config: &Config) -> Result<()> {
 fn ensure_jar_file(mut config: Config) -> Result<(String, Config)> {
     if let Some(jar) = find_jar_file()? {
         info!("Found JAR file: {jar}");
+        return Ok((jar, config));
+    }
+    
+    let was_auto_created = config.auto_created;
+    config.reload()?;
+    config.auto_created = was_auto_created;
+    
+    print!("No Paper JAR file found. Download automatically? [Y/N]: ");
+    io::stdout().flush().context("Failed to flush stdout")?;
+
+    let mut input = String::with_capacity(INPUT_BUFFER_CAPACITY);
+    io::stdin().read_line(&mut input).context("Failed to read input")?;
+    
+    if input.trim().eq_ignore_ascii_case("y") {
+        info!("Downloading JAR file for version: {}", config.minecraft_version);
+        let jar = download_jar(&config.minecraft_version)?;
         Ok((jar, config))
     } else {
-            let was_auto_created = config.auto_created;
-            config.reload()?;
-            config.auto_created = was_auto_created;
-            
-            print!("No Paper JAR file found. Download automatically? [Y/N]: ");
-            io::stdout().flush().context("Failed to flush stdout")?;
-
-            let mut input = String::with_capacity(INPUT_BUFFER_CAPACITY);
-            io::stdin().read_line(&mut input).context("Failed to read input")?;
-            
-            if input.trim().eq_ignore_ascii_case("y") {
-                info!("Downloading JAR file for version: {}", config.minecraft_version);
-                let jar = download_jar(&config.minecraft_version)?;
-                Ok((jar, config))
-            } else {
-                cleanup_auto_created_config(&config)?;
-                println!("\nJAR file is required to start the server.");
-                println!("You can:");
-                println!("  1. Run this launcher again and choose 'Y' to download automatically");
-                println!("  2. Download Paper JAR manually from https://papermc.io/downloads");
-                println!("  3. Place the JAR file in the current directory");
-                anyhow::bail!("Cannot start server without JAR file.");
-            }
-        }
+        cleanup_auto_created_config(&config)?;
+        println!("\nJAR file is required to start the server.");
+        println!("You can:");
+        println!("  1. Run this launcher again and choose 'Y' to download automatically");
+        println!("  2. Download Paper JAR manually from https://papermc.io/downloads");
+        println!("  3. Place the JAR file in the current directory");
+        anyhow::bail!("Cannot start server without JAR file.");
     }
+}
 
 fn cleanup_auto_created_config(config: &Config) -> Result<()> {
     if config.auto_created {

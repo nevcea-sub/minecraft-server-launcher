@@ -5,12 +5,14 @@ use anyhow::{Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::constants::{DOWNLOAD_BUFFER_SIZE, PROGRESS_UPDATE_INTERVAL};
-use crate::download::http::get_client;
+use crate::download::http::{get_client, validate_https_url};
 
 const PROGRESS_TEMPLATE: &str = "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})";
 const PROGRESS_CHARS: &str = "#>-";
 
 pub fn download_file(url: &str, file_path: &Path, _display_name: &str) -> Result<()> {
+    validate_https_url(url)?;
+    
     if file_path.exists() {
         return Ok(());
     }
@@ -51,7 +53,7 @@ pub fn download_file(url: &str, file_path: &Path, _display_name: &str) -> Result
         
         downloaded += bytes_read as u64;
         
-        if downloaded - last_update >= PROGRESS_UPDATE_INTERVAL {
+        if downloaded.saturating_sub(last_update) >= PROGRESS_UPDATE_INTERVAL {
             pb.set_position(downloaded);
             last_update = downloaded;
         }
@@ -76,7 +78,7 @@ mod tests {
         let file_path = temp_dir.path().join("test.txt");
         fs::write(&file_path, "test").unwrap();
 
-        let result = download_file("http://example.com", &file_path, "test.txt");
+        let result = download_file("https://example.com", &file_path, "test.txt");
         assert!(result.is_ok());
     }
 
@@ -87,6 +89,7 @@ mod tests {
 
         let result = download_file("http://invalid-url-that-does-not-exist-12345.com/file", &file_path, "test.txt");
         assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("HTTPS"));
     }
 }
 

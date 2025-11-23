@@ -78,7 +78,7 @@ impl Config {
         Ok(config)
     }
 
-    fn apply_env_overrides(config: &mut Self) {
+    pub fn apply_env_overrides(config: &mut Self) {
         macro_rules! override_u32_field {
             ($env_var:expr, $field:ident) => {
                 if let Ok(val) = std::env::var($env_var) {

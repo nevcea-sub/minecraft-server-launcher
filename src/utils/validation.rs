@@ -4,6 +4,9 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use log::warn;
 use zip::ZipArchive;
+use sha2::{Sha256, Digest};
+
+use crate::constants::{MIN_JAR_FILE_SIZE, ZIP_MAGIC_PK1, ZIP_MAGIC_PK2, ZIP_MAGIC_ARRAY_SIZE, OPTIMAL_CHECKSUM_BUFFER_SIZE};
 
 pub fn validate_jar_file(jar_path: &Path) -> Result<()> {
     if !jar_path.exists() {
@@ -17,18 +20,18 @@ pub fn validate_jar_file(jar_path: &Path) -> Result<()> {
         anyhow::bail!("JAR file is empty: {}", jar_path.display());
     }
 
-    if metadata.len() < 22 {
+    if metadata.len() < MIN_JAR_FILE_SIZE {
         anyhow::bail!("JAR file is too small to be valid ({} bytes): {}", metadata.len(), jar_path.display());
     }
 
     let mut file = File::open(jar_path)
         .with_context(|| format!("Failed to open JAR file: {}", jar_path.display()))?;
 
-    let mut magic = [0u8; 4];
+    let mut magic = [0u8; ZIP_MAGIC_ARRAY_SIZE];
     file.read_exact(&mut magic)
         .with_context(|| format!("Failed to read magic number from {}", jar_path.display()))?;
 
-    if magic[0] != 0x50 || magic[1] != 0x4B {
+    if magic[0] != ZIP_MAGIC_PK1 || magic[1] != ZIP_MAGIC_PK2 {
         anyhow::bail!(
             "Invalid JAR file: missing ZIP magic number (expected PK, found {:02X}{:02X}): {}",
             magic[0], magic[1], jar_path.display()
@@ -58,6 +61,90 @@ pub fn validate_jar_file(jar_path: &Path) -> Result<()> {
             );
         }
     }
+}
+
+pub fn validate_jar_and_calculate_checksum(jar_path: &Path) -> Result<[u8; 32]> {
+    if !jar_path.exists() {
+        anyhow::bail!("JAR file does not exist: {}", jar_path.display());
+    }
+
+    let metadata = std::fs::metadata(jar_path)
+        .with_context(|| format!("Failed to read metadata for {}", jar_path.display()))?;
+    
+    if metadata.len() == 0 {
+        anyhow::bail!("JAR file is empty: {}", jar_path.display());
+    }
+
+    if metadata.len() < MIN_JAR_FILE_SIZE {
+        anyhow::bail!("JAR file is too small to be valid ({} bytes): {}", metadata.len(), jar_path.display());
+    }
+
+    let mut file = File::open(jar_path)
+        .with_context(|| format!("Failed to open JAR file: {}", jar_path.display()))?;
+
+    let mut magic = [0u8; ZIP_MAGIC_ARRAY_SIZE];
+    file.read_exact(&mut magic)
+        .with_context(|| format!("Failed to read magic number from {}", jar_path.display()))?;
+
+    if magic[0] != ZIP_MAGIC_PK1 || magic[1] != ZIP_MAGIC_PK2 {
+        anyhow::bail!(
+            "Invalid JAR file: missing ZIP magic number (expected PK, found {:02X}{:02X}): {}",
+            magic[0], magic[1], jar_path.display()
+        );
+    }
+
+    file.seek(std::io::SeekFrom::Start(0))
+        .with_context(|| format!("Failed to seek to start of {}", jar_path.display()))?;
+
+    let mut archive = ZipArchive::new(&mut file)
+        .map_err(|e| anyhow::anyhow!("Failed to parse JAR file as ZIP archive: {e} (file: {})", jar_path.display()))?;
+    
+    if archive.is_empty() {
+        anyhow::bail!("JAR file contains no entries: {}", jar_path.display());
+    }
+
+    let has_manifest = archive.by_name("META-INF/MANIFEST.MF").is_ok();
+    if !has_manifest {
+        warn!("JAR file missing META-INF/MANIFEST.MF (may still be valid): {}", jar_path.display());
+    }
+
+    file.seek(std::io::SeekFrom::Start(0))
+        .with_context(|| format!("Failed to seek to start for checksum: {}", jar_path.display()))?;
+
+    let file_size = metadata.len();
+    let mut hasher = Sha256::new();
+    
+    if file_size < 64 * 1024 {
+        let mut buffer = [0u8; 8192];
+        loop {
+            let bytes_read = file.read(&mut buffer)
+                .with_context(|| format!("Failed to read file for checksum: {}", jar_path.display()))?;
+            
+            if bytes_read == 0 {
+                break;
+            }
+            
+            hasher.update(&buffer[..bytes_read]);
+        }
+    } else {
+        let mut buffer = vec![0u8; OPTIMAL_CHECKSUM_BUFFER_SIZE];
+        
+        loop {
+            let bytes_read = file.read(&mut buffer)
+                .with_context(|| format!("Failed to read file for checksum: {}", jar_path.display()))?;
+            
+            if bytes_read == 0 {
+                break;
+            }
+            
+            hasher.update(&buffer[..bytes_read]);
+        }
+    }
+    
+    let hash = hasher.finalize();
+    let mut result = [0u8; 32];
+    result.copy_from_slice(hash.as_slice());
+    Ok(result)
 }
 
 #[cfg(test)]
@@ -115,4 +202,3 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("too small"));
     }
 }
-

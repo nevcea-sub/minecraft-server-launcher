@@ -33,3 +33,11 @@ pub const ENV_MINECRAFT_VERSION: &str = "MINECRAFT_VERSION";
 pub const ENV_MIN_RAM: &str = "MIN_RAM";
 pub const ENV_MAX_RAM: &str = "MAX_RAM";
 pub const ENV_WORK_DIR: &str = "WORK_DIR";
+
+pub const HTTP_TIMEOUT_SECS: u64 = 30;
+pub const MIN_JAR_FILE_SIZE: u64 = 22;
+pub const ZIP_MAGIC_PK1: u8 = 0x50;
+pub const ZIP_MAGIC_PK2: u8 = 0x4B;
+pub const ZIP_MAGIC_ARRAY_SIZE: usize = 4;
+pub const HTTP_ERROR_PREVIEW_LENGTH: usize = 200;
+pub const OPTIMAL_CHECKSUM_BUFFER_SIZE: usize = 64 * 1024;
