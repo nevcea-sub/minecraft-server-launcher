@@ -16,9 +16,6 @@ func TestGetCurrentVersion(t *testing.T) {
 	if version == "" {
 		t.Error("expected non-empty version")
 	}
-	if version == "" {
-		t.Error("version should not be empty")
-	}
 }
 
 func TestNormalizeVersion(t *testing.T) {
@@ -73,7 +70,36 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
+func getExpectedAssetName() string {
+	assetMap := map[string]map[string]string{
+		"windows": {
+			"amd64": "paper-launcher-windows-amd64.exe",
+			"arm64": "paper-launcher-windows-arm64.exe",
+		},
+		"linux": {
+			"amd64": "paper-launcher-linux-amd64",
+			"arm64": "paper-launcher-linux-arm64",
+		},
+		"darwin": {
+			"amd64": "paper-launcher-darwin-amd64",
+			"arm64": "paper-launcher-darwin-arm64",
+		},
+	}
+	
+	if osMap, ok := assetMap[runtime.GOOS]; ok {
+		if name, ok := osMap[runtime.GOARCH]; ok {
+			return name
+		}
+	}
+	return ""
+}
+
 func TestGetAssetForCurrentOS(t *testing.T) {
+	expectedName := getExpectedAssetName()
+	if expectedName == "" {
+		t.Skipf("unsupported platform %s/%s", runtime.GOOS, runtime.GOARCH)
+	}
+
 	release := &ReleaseResponse{
 		Assets: []Asset{
 			{Name: "paper-launcher-windows-amd64.exe"},
@@ -87,33 +113,7 @@ func TestGetAssetForCurrentOS(t *testing.T) {
 
 	asset := getAssetForCurrentOS(release)
 	if asset == nil {
-		t.Skipf("no asset found for %s/%s, skipping test", runtime.GOOS, runtime.GOARCH)
-	}
-
-	expectedName := ""
-	switch runtime.GOOS {
-	case "windows":
-		if runtime.GOARCH == "amd64" {
-			expectedName = "paper-launcher-windows-amd64.exe"
-		} else if runtime.GOARCH == "arm64" {
-			expectedName = "paper-launcher-windows-arm64.exe"
-		}
-	case "linux":
-		if runtime.GOARCH == "amd64" {
-			expectedName = "paper-launcher-linux-amd64"
-		} else if runtime.GOARCH == "arm64" {
-			expectedName = "paper-launcher-linux-arm64"
-		}
-	case "darwin":
-		if runtime.GOARCH == "amd64" {
-			expectedName = "paper-launcher-darwin-amd64"
-		} else if runtime.GOARCH == "arm64" {
-			expectedName = "paper-launcher-darwin-arm64"
-		}
-	}
-
-	if expectedName == "" {
-		t.Skipf("unsupported platform %s/%s", runtime.GOOS, runtime.GOARCH)
+		t.Fatalf("expected asset %s for %s/%s, got nil", expectedName, runtime.GOOS, runtime.GOARCH)
 	}
 
 	if asset.Name != expectedName {
@@ -161,8 +161,31 @@ func TestValidateUpdate(t *testing.T) {
 	}
 }
 
+func setupMockServer(handler http.HandlerFunc) *httptest.Server {
+	return httptest.NewServer(handler)
+}
+
+func withMockAPI(t *testing.T, handler http.HandlerFunc, testVersion string, fn func()) {
+	ts := setupMockServer(handler)
+	defer ts.Close()
+
+	originalAPIBase := githubAPIBase
+	originalVersion := launcherVersion
+	defer func() {
+		githubAPIBase = originalAPIBase
+		launcherVersion = originalVersion
+	}()
+
+	githubAPIBase = ts.URL
+	if testVersion != "" {
+		launcherVersion = testVersion
+	}
+
+	fn()
+}
+
 func TestCheckForUpdate_NewerVersion(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -181,36 +204,28 @@ func TestCheckForUpdate_NewerVersion(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(release); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
-	}))
-	defer ts.Close()
+	}, "", func() {
+		hasUpdate, release, err := CheckForUpdate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	originalAPIBase := githubAPIBase
-	defer func() {
-		githubAPIBase = originalAPIBase
-	}()
+		if !hasUpdate {
+			t.Error("expected update available")
+		}
 
-	githubAPIBase = ts.URL
+		if release == nil {
+			t.Fatal("expected release info")
+		}
 
-	hasUpdate, release, err := CheckForUpdate()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if !hasUpdate {
-		t.Error("expected update available")
-	}
-
-	if release == nil {
-		t.Fatal("expected release info")
-	}
-
-	if release.TagName != "v2.0.0" {
-		t.Errorf("expected tag v2.0.0, got %s", release.TagName)
-	}
+		if release.TagName != "v2.0.0" {
+			t.Errorf("expected tag v2.0.0, got %s", release.TagName)
+		}
+	})
 }
 
 func TestCheckForUpdate_OlderVersion(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		release := ReleaseResponse{
 			TagName: "v0.2.0",
 			Name:    "Release 0.2.0",
@@ -222,32 +237,24 @@ func TestCheckForUpdate_OlderVersion(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(release); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
-	}))
-	defer ts.Close()
+	}, "", func() {
+		hasUpdate, release, err := CheckForUpdate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	originalAPIBase := githubAPIBase
-	defer func() {
-		githubAPIBase = originalAPIBase
-	}()
+		if hasUpdate {
+			t.Error("expected no update available")
+		}
 
-	githubAPIBase = ts.URL
-
-	hasUpdate, release, err := CheckForUpdate()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if hasUpdate {
-		t.Error("expected no update available")
-	}
-
-	if release != nil {
-		t.Error("expected nil release for older version")
-	}
+		if release != nil {
+			t.Error("expected nil release for older version")
+		}
+	})
 }
 
 func TestCheckForUpdate_SameVersion(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		release := ReleaseResponse{
 			TagName: "0.4.0",
 			Name:    "Release 0.4.0",
@@ -259,85 +266,58 @@ func TestCheckForUpdate_SameVersion(t *testing.T) {
 		if err := json.NewEncoder(w).Encode(release); err != nil {
 			t.Errorf("failed to encode response: %v", err)
 		}
-	}))
-	defer ts.Close()
+	}, "0.4.0", func() {
+		hasUpdate, release, err := CheckForUpdate()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
 
-	originalAPIBase := githubAPIBase
-	originalVersion := launcherVersion
-	defer func() {
-		githubAPIBase = originalAPIBase
-		launcherVersion = originalVersion
-	}()
+		if hasUpdate {
+			t.Error("expected no update available for same version")
+		}
 
-	githubAPIBase = ts.URL
-	launcherVersion = "0.4.0"
-
-	hasUpdate, release, err := CheckForUpdate()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if hasUpdate {
-		t.Error("expected no update available for same version")
-	}
-
-	if release != nil {
-		t.Error("expected nil release for same version")
-	}
+		if release != nil {
+			t.Error("expected nil release for same version")
+		}
+	})
 }
 
 func TestCheckForUpdate_APIFailure(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer ts.Close()
+	}, "", func() {
+		hasUpdate, release, err := CheckForUpdate()
+		if err == nil {
+			t.Error("expected error for API failure")
+		}
 
-	originalAPIBase := githubAPIBase
-	defer func() {
-		githubAPIBase = originalAPIBase
-	}()
+		if hasUpdate {
+			t.Error("expected no update on error")
+		}
 
-	githubAPIBase = ts.URL
-
-	hasUpdate, release, err := CheckForUpdate()
-	if err == nil {
-		t.Error("expected error for API failure")
-	}
-
-	if hasUpdate {
-		t.Error("expected no update on error")
-	}
-
-	if release != nil {
-		t.Error("expected nil release on error")
-	}
+		if release != nil {
+			t.Error("expected nil release on error")
+		}
+	})
 }
 
 func TestCheckForUpdate_InvalidJSON(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, "invalid json")
-	}))
-	defer ts.Close()
+	}, "", func() {
+		hasUpdate, release, err := CheckForUpdate()
+		if err == nil {
+			t.Error("expected error for invalid JSON")
+		}
 
-	originalAPIBase := githubAPIBase
-	defer func() {
-		githubAPIBase = originalAPIBase
-	}()
+		if hasUpdate {
+			t.Error("expected no update on error")
+		}
 
-	githubAPIBase = ts.URL
-
-	hasUpdate, release, err := CheckForUpdate()
-	if err == nil {
-		t.Error("expected error for invalid JSON")
-	}
-
-	if hasUpdate {
-		t.Error("expected no update on error")
-	}
-
-	if release != nil {
-		t.Error("expected nil release on error")
-	}
+		if release != nil {
+			t.Error("expected nil release on error")
+		}
+	})
 }
 
