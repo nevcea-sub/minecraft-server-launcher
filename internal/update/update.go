@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -13,9 +14,12 @@ import (
 )
 
 const (
-	timeout          = 30 * time.Second
-	launcherVersion = "0.3.0"
-	githubUserAgent  = "minecraft-server-launcher-updater/0.3"
+	timeout = 30 * time.Second
+)
+
+var (
+	launcherVersion = "dev"
+	githubUserAgent = "minecraft-server-launcher-updater"
 )
 
 var (
@@ -46,7 +50,25 @@ type ReleaseResponse struct {
 }
 
 func GetCurrentVersion() string {
+	if launcherVersion == "" || launcherVersion == "dev" {
+		return getVersionFromGit()
+	}
 	return launcherVersion
+}
+
+func getVersionFromGit() string {
+	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0")
+	output, err := cmd.Output()
+	if err != nil {
+		return "dev"
+	}
+	
+	version := strings.TrimSpace(string(output))
+	version = normalizeVersion(version)
+	if version == "" {
+		return "dev"
+	}
+	return version
 }
 
 func CheckForUpdate() (bool, *ReleaseResponse, error) {
@@ -76,7 +98,7 @@ func CheckForUpdate() (bool, *ReleaseResponse, error) {
 		return false, nil, fmt.Errorf("failed to parse release info: %w", err)
 	}
 
-	currentVersion := normalizeVersion(launcherVersion)
+	currentVersion := normalizeVersion(GetCurrentVersion())
 	latestVersion := normalizeVersion(release.TagName)
 
 	if compareVersions(latestVersion, currentVersion) > 0 {

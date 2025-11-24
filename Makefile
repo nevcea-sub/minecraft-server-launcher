@@ -1,14 +1,24 @@
 .PHONY: build test clean run install
 
+ifeq ($(OS),Windows_NT)
+	VERSION := $(shell powershell -Command "$$tag = git describe --tags --abbrev=0 2>&1; if ($$LASTEXITCODE -eq 0) { $$tag -replace '^v', '' } else { 'dev' }")
+else
+	VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
+endif
+ifeq ($(VERSION),)
+	VERSION := dev
+endif
+
 build:
-	go build -ldflags="-s -w" -o paper-launcher.exe .
+	go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher.exe .
 
 build-all:
-	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o paper-launcher-windows-amd64.exe .
-	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o paper-launcher-linux-amd64 .
-	GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o paper-launcher-linux-arm64 .
-	GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o paper-launcher-darwin-amd64 .
-	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o paper-launcher-darwin-arm64 .
+	@echo "Building for all platforms with version $(VERSION)"
+	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher-windows-amd64.exe .
+	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher-linux-amd64 .
+	GOOS=linux GOARCH=arm64 go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher-linux-arm64 .
+	GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher-darwin-amd64 .
+	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=$(VERSION)' -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.githubUserAgent=minecraft-server-launcher-updater/$(VERSION)'" -o paper-launcher-darwin-arm64 .
 
 test:
 	go test -v ./...
