@@ -38,7 +38,6 @@ func validateJarStructure(jarPath string) (*zip.Reader, error) {
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			// Ignore close error in validation
 			_ = err
 		}
 	}()
@@ -85,20 +84,17 @@ func ValidateJarFile(jarPath string) error {
 }
 
 func ValidateJarAndCalculateChecksum(jarPath string) (string, error) {
-	// 공통 검증 로직 사용
 	_, err := validateJarStructure(jarPath)
 	if err != nil {
 		return "", err
 	}
 
-	// 체크섬 계산을 위해 파일을 다시 열기
 	file, err := os.Open(jarPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open JAR file: %w", err)
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			// Ignore close error in validation
 			_ = err
 		}
 	}()
@@ -122,7 +118,6 @@ func ValidateChecksum(jarPath, expectedChecksum string) error {
 	}
 	defer func() {
 		if err := file.Close(); err != nil {
-			// Ignore close error in validation
 			_ = err
 		}
 	}()
@@ -151,19 +146,14 @@ func LoadChecksumFile(path string) (string, error) {
 		return "", fmt.Errorf("failed to read checksum file: %w", err)
 	}
 
-	// 공백 제거 (앞뒤 공백만 제거, 더 효율적)
 	data = bytes.TrimSpace(data)
 	
-	// 길이 체크를 먼저 수행하여 조기 반환
 	if len(data) != 64 {
 		return "", fmt.Errorf("invalid checksum format: expected 64 characters, got %d", len(data))
 	}
 
-	// 정규표현식 대신 직접 바이트 검증 (더 빠름)
-	// 바이트 단위 검증으로 rune 변환 오버헤드 제거
 	for i := 0; i < 64; i++ {
 		c := data[i]
-		// 비트 연산으로 범위 체크 최적화
 		isDigit := c >= '0' && c <= '9'
 		isLowerHex := c >= 'a' && c <= 'f'
 		isUpperHex := c >= 'A' && c <= 'F'

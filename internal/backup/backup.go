@@ -23,7 +23,6 @@ func PerformBackup(worlds []string, retentionCount int) error {
 		return fmt.Errorf("backup directory is not writable: %w", err)
 	}
 	if err := os.Remove(testFile); err != nil {
-		// Ignore remove error for test file
 		_ = err
 	}
 
@@ -69,7 +68,6 @@ func createZip(targetFile string, worlds []string) error {
 	}
 	defer func() {
 		if err := zipFile.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -77,7 +75,6 @@ func createZip(targetFile string, worlds []string) error {
 	archive := zip.NewWriter(zipFile)
 	defer func() {
 		if err := archive.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -125,7 +122,6 @@ func createZip(targetFile string, worlds []string) error {
 
 			_, err = io.Copy(writer, file)
 			if closeErr := file.Close(); closeErr != nil {
-				// Ignore close error after copy
 				_ = closeErr
 			}
 			return err

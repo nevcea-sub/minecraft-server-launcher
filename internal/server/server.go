@@ -260,7 +260,6 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string,
 		fmt.Printf("\n[INFO] Received signal: %v, shutting down server...\n", sig)
 		if err := cmd.Process.Signal(sig); err != nil {
 			if killErr := cmd.Process.Kill(); killErr != nil {
-				// Ignore kill error after signal failed
 				_ = killErr
 			}
 		}

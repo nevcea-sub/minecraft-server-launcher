@@ -109,7 +109,6 @@ func Pause() {
 	fmt.Print("\nPress Enter to exit...")
 	reader := bufio.NewReader(os.Stdin)
 	if _, err := reader.ReadBytes('\n'); err != nil {
-		// Ignore read error on pause
 		_ = err
 	}
 }

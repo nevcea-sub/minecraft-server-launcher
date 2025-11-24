@@ -14,7 +14,6 @@ func TestGetLatestVersion(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
 			if _, err := fmt.Fprintln(w, `{"versions": ["1.19", "1.20", "1.21"]}`); err != nil {
-				// Ignore write error in test
 				_ = err
 			}
 		} else {
@@ -38,7 +37,6 @@ func TestGetLatestBuild(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/builds") {
 			if _, err := fmt.Fprintln(w, `{"builds": [{"build": 10}, {"build": 20}]}`); err != nil {
-				// Ignore write error in test
 				_ = err
 			}
 		} else {
@@ -60,7 +58,6 @@ func TestGetLatestBuild(t *testing.T) {
 func TestGetJarName(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := fmt.Fprintln(w, `{"downloads": {"application": {"name": "paper-1.21-20.jar"}}}`); err != nil {
-			// Ignore write error in test
 			_ = err
 		}
 	}))
@@ -79,7 +76,6 @@ func TestGetJarName(t *testing.T) {
 func TestDownloadFile(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if _, err := fmt.Fprint(w, "file content"); err != nil {
-			// Ignore write error in test
 			_ = err
 		}
 	}))

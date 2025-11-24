@@ -160,7 +160,6 @@ func doRequest(client *http.Client, url string) (*http.Response, error) {
 
 		if resp != nil {
 			if err := resp.Body.Close(); err != nil {
-				// Ignore close error in retry loop
 				_ = err
 			}
 		}
@@ -186,7 +185,6 @@ func getLatestVersion(client *http.Client, baseURL string) (string, error) {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -215,7 +213,6 @@ func getLatestBuild(client *http.Client, baseURL, version string) (int, error) {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -244,7 +241,6 @@ func getJarName(client *http.Client, baseURL, version string, build int) (string
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -274,7 +270,6 @@ func downloadFile(client *http.Client, url, filename string) error {
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			// Ignore close error in defer
 			_ = err
 		}
 	}()
@@ -300,7 +295,6 @@ func downloadFile(client *http.Client, url, filename string) error {
 	defer func() {
 		if !closed {
 			if err := out.Close(); err != nil {
-				// Ignore close error in defer
 				_ = err
 			}
 		}
@@ -311,13 +305,11 @@ func downloadFile(client *http.Client, url, filename string) error {
 		if !success {
 			if !closed {
 				if err := out.Close(); err != nil {
-					// Ignore close error in cleanup
 					_ = err
 				}
 				closed = true
 			}
 			if err := os.Remove(tempFile); err != nil {
-				// Ignore remove error in cleanup
 				_ = err
 			}
 		}
