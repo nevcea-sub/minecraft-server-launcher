@@ -381,7 +381,7 @@ func run(cfg *config.Config) error {
 	if cfg.MaxRAM == 0 {
 		ramMsg += fmt.Sprintf(" (auto-calculated: %d%% of available RAM)", cfg.AutoRAMPercentage)
 	}
-	logMessage(logLevelInfo, ramMsg)
+	logMessage(logLevelInfo, "%s", ramMsg)
 
 	return server.RunServer(jarFile, cfg.MinRAM, maxRAM, cfg.UseZGC, javaPath, javaRes.versionNum, cfg.ServerArgs)
 }
