@@ -39,7 +39,7 @@ func FindJarFile() (string, error) {
 		modTime int64
 	}
 
-	var jars []jarInfo
+	jars := make([]jarInfo, 0, len(files))
 
 	for _, file := range files {
 		info, err := os.Stat(file)

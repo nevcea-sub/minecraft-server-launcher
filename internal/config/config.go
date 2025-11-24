@@ -9,6 +9,7 @@ import (
 
 const defaultConfig = `minecraft_version: "latest"
 auto_update: false
+auto_update_launcher: true
 auto_backup: true
 backup_count: 10
 backup_worlds:
@@ -25,20 +26,21 @@ server_args:
 `
 
 type Config struct {
-	MinecraftVersion  string   `yaml:"minecraft_version"`
-	AutoUpdate        bool     `yaml:"auto_update"`
-	AutoBackup        bool     `yaml:"auto_backup"`
-	BackupCount       int      `yaml:"backup_count"`
-	BackupWorlds      []string `yaml:"backup_worlds"`
-	AutoRestart       bool     `yaml:"auto_restart"`
-	MinRAM            int      `yaml:"min_ram"`
-	MaxRAM            int      `yaml:"max_ram"`
-	UseZGC            bool     `yaml:"use_zgc"`
-	AutoRAMPercentage int      `yaml:"auto_ram_percentage"`
-	ServerArgs        []string `yaml:"server_args"`
-	WorkDir           string   `yaml:"work_dir"`
-	JavaPath          string   `yaml:"java_path"`
-	LogFile           string   `yaml:"log_file"`
+	MinecraftVersion    string   `yaml:"minecraft_version"`
+	AutoUpdate          bool     `yaml:"auto_update"`
+	AutoUpdateLauncher bool     `yaml:"auto_update_launcher"`
+	AutoBackup          bool     `yaml:"auto_backup"`
+	BackupCount         int      `yaml:"backup_count"`
+	BackupWorlds        []string `yaml:"backup_worlds"`
+	AutoRestart         bool     `yaml:"auto_restart"`
+	MinRAM              int      `yaml:"min_ram"`
+	MaxRAM              int      `yaml:"max_ram"`
+	UseZGC              bool     `yaml:"use_zgc"`
+	AutoRAMPercentage   int      `yaml:"auto_ram_percentage"`
+	ServerArgs          []string `yaml:"server_args"`
+	WorkDir             string   `yaml:"work_dir"`
+	JavaPath            string   `yaml:"java_path"`
+	LogFile             string   `yaml:"log_file"`
 }
 
 func Load(path string) (*Config, error) {

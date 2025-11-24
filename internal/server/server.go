@@ -116,7 +116,8 @@ func extractJavaVersion(output string) string {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.Contains(strings.ToLower(line), "version") {
+		lowerLine := strings.ToLower(line)
+		if strings.Contains(lowerLine, "version") {
 			matches := javaVersionRegex.FindStringSubmatch(line)
 			if len(matches) > 0 {
 				for i := 1; i < len(matches); i++ {
@@ -209,7 +210,7 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string,
 		}
 
 		if javaVersion < 17 {
-			var filteredFlags []string
+			filteredFlags := make([]string, 0, len(zgcFlags))
 			for _, flag := range zgcFlags {
 				if !strings.Contains(flag, "ZGenerational") {
 					filteredFlags = append(filteredFlags, flag)

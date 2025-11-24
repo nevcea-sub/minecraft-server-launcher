@@ -12,6 +12,7 @@ import (
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/config"
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/download"
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/server"
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/update"
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
 )
 
@@ -136,12 +137,71 @@ func main() {
 
 func run(cfg *config.Config) error {
 	logMessage(logLevelInfo, "Launcher started")
+	currentVersion := update.GetCurrentVersion()
+	logMessage(logLevelInfo, "Launcher version: %s", currentVersion)
 
 	if cfg == nil {
 		var err error
 		cfg, err = config.Load(*configFile)
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
+		}
+	}
+
+	hasUpdate, release, err := update.CheckForUpdate()
+	if err != nil {
+		logMessage(logLevelWarn, "Failed to check for launcher updates: %v", err)
+	} else if hasUpdate {
+		logMessage(logLevelInfo, "New launcher version available: %s", release.TagName)
+		if release.Body != "" {
+			logMessage(logLevelInfo, "Release notes: %s", strings.Split(release.Body, "\n")[0])
+		}
+
+		doUpdate := false
+		if cfg.AutoUpdateLauncher {
+			doUpdate = true
+			logMessage(logLevelInfo, "Auto-updating launcher...")
+		} else {
+			fmt.Printf("[PROMPT] Do you want to update the launcher to %s? [Y/N]: ", release.TagName)
+			reader := bufio.NewReader(os.Stdin)
+			response, readErr := reader.ReadString('\n')
+			if readErr != nil {
+				logMessage(logLevelWarn, "Failed to read user input: %v", readErr)
+			} else {
+				response = strings.TrimSpace(response)
+				if response == "Y" || response == "y" {
+					doUpdate = true
+				}
+			}
+		}
+
+		if doUpdate {
+			logMessage(logLevelInfo, "Downloading launcher update...")
+			tempFile, err := update.DownloadUpdate(release)
+			if err != nil {
+				logMessage(logLevelError, "Failed to download update: %v", err)
+			} else {
+				logMessage(logLevelInfo, "Update downloaded successfully")
+				
+				if err := update.ValidateUpdate(tempFile); err != nil {
+					logMessage(logLevelError, "Update validation failed: %v", err)
+					if err := os.Remove(tempFile); err != nil {
+						logMessage(logLevelWarn, "Failed to remove invalid update file: %v", err)
+					}
+				} else {
+					logMessage(logLevelInfo, "Installing launcher update...")
+					if err := update.InstallUpdate(tempFile); err != nil {
+						logMessage(logLevelError, "Failed to install update: %v", err)
+						if err := os.Remove(tempFile); err != nil {
+							logMessage(logLevelWarn, "Failed to remove temp file: %v", err)
+						}
+					} else {
+						logMessage(logLevelInfo, "Launcher updated successfully! Please restart the launcher.")
+						fmt.Println("[INFO] Launcher updated successfully! Please restart the launcher.")
+						return nil
+					}
+				}
+			}
 		}
 	}
 

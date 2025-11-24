@@ -51,7 +51,7 @@ func PerformBackup(worlds []string, retentionCount int) error {
 }
 
 func filterExistingWorlds(worlds []string) []string {
-	var result []string
+	result := make([]string, 0, len(worlds))
 	for _, w := range worlds {
 		info, err := os.Stat(w)
 		if err == nil && info.IsDir() {
@@ -120,7 +120,8 @@ func createZip(targetFile string, worlds []string) error {
 				return fmt.Errorf("failed to open file: %w", err)
 			}
 
-			_, err = io.Copy(writer, file)
+			buf := make([]byte, 32*1024)
+			_, err = io.CopyBuffer(writer, file, buf)
 			if closeErr := file.Close(); closeErr != nil {
 				_ = closeErr
 			}
@@ -150,7 +151,7 @@ func rotateBackups(limit int) error {
 		modTime time.Time
 	}
 
-	var backups []backupInfo
+	backups := make([]backupInfo, 0, len(files))
 	for _, file := range files {
 		if !file.IsDir() && strings.HasPrefix(file.Name(), "backup-") && strings.HasSuffix(file.Name(), ".zip") {
 			info, err := file.Info()

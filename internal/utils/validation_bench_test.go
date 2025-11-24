@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"archive/zip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +58,51 @@ func BenchmarkLoadChecksumFile_New(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		LoadChecksumFile(checksumPath)
+	}
+}
+
+func BenchmarkValidateJarAndCalculateChecksum(b *testing.B) {
+	tmpDir := b.TempDir()
+	jarPath := filepath.Join(tmpDir, "test.jar")
+	createValidJarForBench(b, jarPath)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ValidateJarAndCalculateChecksum(jarPath)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func createValidJarForBench(b *testing.B, path string) {
+	file, err := os.Create(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer file.Close()
+
+	w := zip.NewWriter(file)
+	defer w.Close()
+
+	f, err := w.Create("META-INF/MANIFEST.MF")
+	if err != nil {
+		b.Fatal(err)
+	}
+	if _, err := f.Write([]byte("Manifest-Version: 1.0\n")); err != nil {
+		b.Fatal(err)
+	}
+
+	f, err = w.Create("test.txt")
+	if err != nil {
+		b.Fatal(err)
+	}
+	content := make([]byte, 1024*1024)
+	for i := range content {
+		content[i] = byte(i % 256)
+	}
+	if _, err := f.Write(content); err != nil {
+		b.Fatal(err)
 	}
 }
 

@@ -4,6 +4,7 @@ A fast and reliable Minecraft Paper server launcher written in Go.
 
 ## Features
 
+- **Automatic launcher updates** - Check and update the launcher automatically from GitHub Releases
 - Automatic JAR download and update management
 - Smart RAM allocation based on system resources
 - Java version validation (Java 17+)
@@ -46,7 +47,8 @@ Edit `config.yaml`:
 
 ```yaml
 minecraft_version: "latest"
-auto_update: false
+auto_update: false              # Auto-update Minecraft server JAR
+auto_update_launcher: true      # Auto-update the launcher itself (enabled by default)
 auto_backup: true
 backup_count: 10
 backup_worlds:
@@ -71,6 +73,19 @@ server_args:
   -verbose     Enable verbose logging
   -no-pause    Don't pause on exit
 ```
+
+### Auto-Update Feature
+
+The launcher can automatically check for and install updates from GitHub Releases:
+
+- **Manual Update Check**: When a new version is available, you'll be prompted to update
+- **Automatic Updates**: Set `auto_update_launcher: true` in `config.yaml` to automatically download and install updates
+- **Update Process**: 
+  - The launcher checks GitHub Releases API on startup
+  - Downloads the appropriate binary for your OS/architecture
+  - Backs up the current executable (`.old` extension)
+  - Installs the new version
+  - Restarts required to use the new version
 
 ### Environment Variables
 

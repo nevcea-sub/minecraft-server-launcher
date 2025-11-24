@@ -24,6 +24,15 @@ const (
 	retryBackoff = 2.0
 )
 
+var defaultHTTPClient = &http.Client{
+	Timeout: timeout,
+	Transport: &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	},
+}
+
 type ProjectResponse struct {
 	Versions []string `json:"versions"`
 }
@@ -58,14 +67,13 @@ func CheckUpdate(jarName string) (bool, int, string, error) {
 		return false, 0, "", fmt.Errorf("invalid build number: %s", matches[2])
 	}
 
-	client := &http.Client{Timeout: timeout}
-	latestBuild, err := getLatestBuild(client, apiBase, version)
+	latestBuild, err := getLatestBuild(defaultHTTPClient, apiBase, version)
 	if err != nil {
 		return false, 0, "", fmt.Errorf("failed to get latest build: %w", err)
 	}
 
 	if latestBuild > currentBuild {
-		newJarName, err := getJarName(client, apiBase, version, latestBuild)
+		newJarName, err := getJarName(defaultHTTPClient, apiBase, version, latestBuild)
 		if err != nil {
 			return true, latestBuild, "", fmt.Errorf("failed to get new jar name: %w", err)
 		}
@@ -76,22 +84,20 @@ func CheckUpdate(jarName string) (bool, int, string, error) {
 }
 
 func DownloadJar(version string) (string, error) {
-	client := &http.Client{Timeout: timeout}
-
 	if version == "latest" {
-		ver, err := getLatestVersion(client, apiBase)
+		ver, err := getLatestVersion(defaultHTTPClient, apiBase)
 		if err != nil {
 			return "", err
 		}
 		version = ver
 	}
 
-	build, err := getLatestBuild(client, apiBase, version)
+	build, err := getLatestBuild(defaultHTTPClient, apiBase, version)
 	if err != nil {
 		return "", err
 	}
 
-	jarName, err := getJarName(client, apiBase, version, build)
+	jarName, err := getJarName(defaultHTTPClient, apiBase, version, build)
 	if err != nil {
 		return "", err
 	}
@@ -119,7 +125,7 @@ func DownloadJar(version string) (string, error) {
 	url := fmt.Sprintf("%s/versions/%s/builds/%d/downloads/%s", apiBase, version, build, jarName)
 	fmt.Printf("[INFO] Downloading %s...\n", jarName)
 
-	if err := downloadFile(client, url, jarName); err != nil {
+	if err := downloadFile(defaultHTTPClient, url, jarName); err != nil {
 		return "", err
 	}
 
