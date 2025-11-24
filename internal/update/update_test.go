@@ -212,8 +212,8 @@ func TestCheckForUpdate_NewerVersion(t *testing.T) {
 func TestCheckForUpdate_OlderVersion(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		release := ReleaseResponse{
-			TagName: "v0.5.0",
-			Name:    "Release 0.5.0",
+			TagName: "v0.2.0",
+			Name:    "Release 0.2.0",
 			Body:    "Older release",
 			Assets:  []Asset{},
 		}
