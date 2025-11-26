@@ -1,37 +1,20 @@
 package download
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"regexp"
 	"strconv"
-	"time"
 
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
-	"github.com/schollz/progressbar/v3"
 )
 
 const (
-	apiBase         = "https://api.papermc.io/v2/projects/paper"
-	timeout         = 30 * time.Second
-	downloadBufSize = 128 * 1024
-	userAgent       = "minecraft-server-launcher/1.0"
-	maxRetries      = 3
-	retryDelay      = 2 * time.Second
-	retryBackoff    = 2.0
+	apiBase = "https://api.papermc.io/v2/projects/paper"
 )
-
-var defaultHTTPClient = &http.Client{
-	Timeout: timeout,
-	Transport: &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,
-		IdleConnTimeout:     90 * time.Second,
-	},
-}
 
 type ProjectResponse struct {
 	Versions []string `json:"versions"`
@@ -55,7 +38,7 @@ var (
 	jarNameRegex = regexp.MustCompile(`paper-(.+)-(\d+)\.jar`)
 )
 
-func CheckUpdate(jarName string) (bool, int, string, error) {
+func CheckUpdate(ctx context.Context, jarName string) (bool, int, string, error) {
 	matches := jarNameRegex.FindStringSubmatch(jarName)
 	if len(matches) != 3 {
 		return false, 0, "", fmt.Errorf("invalid jar filename format: %s", jarName)
@@ -67,13 +50,13 @@ func CheckUpdate(jarName string) (bool, int, string, error) {
 		return false, 0, "", fmt.Errorf("invalid build number: %s", matches[2])
 	}
 
-	latestBuild, err := getLatestBuild(defaultHTTPClient, apiBase, version)
+	latestBuild, err := getLatestBuild(ctx, apiBase, version)
 	if err != nil {
 		return false, 0, "", fmt.Errorf("failed to get latest build: %w", err)
 	}
 
 	if latestBuild > currentBuild {
-		newJarName, err := getJarName(defaultHTTPClient, apiBase, version, latestBuild)
+		newJarName, err := getJarName(ctx, apiBase, version, latestBuild)
 		if err != nil {
 			return true, latestBuild, "", fmt.Errorf("failed to get new jar name: %w", err)
 		}
@@ -83,51 +66,51 @@ func CheckUpdate(jarName string) (bool, int, string, error) {
 	return false, 0, "", nil
 }
 
-func DownloadJar(version string) (string, error) {
+func DownloadJar(ctx context.Context, version string) (string, error) {
 	if version == "latest" {
-		ver, err := getLatestVersion(defaultHTTPClient, apiBase)
+		ver, err := getLatestVersion(ctx, apiBase)
 		if err != nil {
 			return "", err
 		}
 		version = ver
 	}
 
-	build, err := getLatestBuild(defaultHTTPClient, apiBase, version)
+	build, err := getLatestBuild(ctx, apiBase, version)
 	if err != nil {
 		return "", err
 	}
 
-	jarName, err := getJarName(defaultHTTPClient, apiBase, version, build)
+	jarName, err := getJarName(ctx, apiBase, version, build)
 	if err != nil {
 		return "", err
 	}
 
 	if _, err := os.Stat(jarName); err == nil {
-		fmt.Printf("[INFO] JAR file already exists: %s\n", jarName)
+		logger.Info("JAR file already exists: %s", jarName)
 		checksumFile := jarName + ".sha256"
 		if expectedChecksum, err := utils.LoadChecksumFile(checksumFile); err == nil && expectedChecksum != "" {
 			if err := utils.ValidateChecksum(jarName, expectedChecksum); err == nil {
-				fmt.Printf("[OK] Existing JAR file checksum validated\n")
+				logger.Info("Existing JAR file checksum validated")
 				return jarName, nil
 			}
-			fmt.Printf("[INFO] Checksum validation failed, re-downloading...\n")
+			logger.Info("Checksum validation failed, re-downloading...")
 		} else {
-			fmt.Printf("[INFO] No checksum file found, re-downloading to ensure integrity...\n")
+			logger.Info("No checksum file found, re-downloading to ensure integrity...")
 		}
 	}
 
 	tempFile := jarName + ".part"
 	if _, err := os.Stat(tempFile); err == nil {
-		fmt.Printf("[INFO] Found incomplete download, removing...\n")
+		logger.Info("Found incomplete download, removing...")
 		if err := os.Remove(tempFile); err != nil {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to remove incomplete download: %v\n", err)
+			logger.Warn("Failed to remove incomplete download: %v", err)
 		}
 	}
 
 	url := fmt.Sprintf("%s/versions/%s/builds/%d/downloads/%s", apiBase, version, build, jarName)
-	fmt.Printf("[INFO] Downloading %s...\n", jarName)
+	logger.Info("Downloading %s...", jarName)
 
-	if err := downloadFile(defaultHTTPClient, url, jarName); err != nil {
+	if err := utils.DownloadFile(ctx, url, jarName); err != nil {
 		return "", err
 	}
 
@@ -141,62 +124,16 @@ func DownloadJar(version string) (string, error) {
 		return "", fmt.Errorf("failed to save checksum file: %w", err)
 	}
 
-	fmt.Printf("[OK] Downloaded and validated JAR file (SHA-256: %s)\n", checksum[:16]+"...")
+	logger.Info("Downloaded and validated JAR file (SHA-256: %s)", checksum[:16]+"...")
 	return jarName, nil
 }
 
-func doRequest(client *http.Client, url string) (*http.Response, error) {
-	var lastErr error
-	delay := retryDelay
-
-	for attempt := 0; attempt < maxRetries; attempt++ {
-		if attempt > 0 {
-			time.Sleep(delay)
-			delay = time.Duration(float64(delay) * retryBackoff)
-		}
-
-		req, err := http.NewRequest("GET", url, nil)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create request: %w", err)
-		}
-		req.Header.Set("User-Agent", userAgent)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			lastErr = fmt.Errorf("request failed: %w", err)
-			if attempt < maxRetries-1 {
-				fmt.Fprintf(os.Stderr, "[WARN] Request failed (attempt %d/%d), retrying...\n", attempt+1, maxRetries)
-			}
-			continue
-		}
-
-		if resp.StatusCode == 200 {
-			return resp, nil
-		}
-
-		lastErr = fmt.Errorf("API returned status %d", resp.StatusCode)
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-
-		if attempt < maxRetries-1 {
-			fmt.Fprintf(os.Stderr, "[WARN] Request failed (attempt %d/%d), retrying...\n", attempt+1, maxRetries)
-		}
-	}
-
-	return nil, fmt.Errorf("request failed after %d attempts: %w", maxRetries, lastErr)
-}
-
-func getLatestVersion(client *http.Client, baseURL string) (string, error) {
-	resp, err := doRequest(client, baseURL)
+func getLatestVersion(ctx context.Context, baseURL string) (string, error) {
+	resp, err := utils.DoRequest(ctx, nil, baseURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch versions: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
+	defer resp.Body.Close()
 
 	var proj ProjectResponse
 	if err := json.NewDecoder(resp.Body).Decode(&proj); err != nil {
@@ -210,17 +147,13 @@ func getLatestVersion(client *http.Client, baseURL string) (string, error) {
 	return proj.Versions[len(proj.Versions)-1], nil
 }
 
-func getLatestBuild(client *http.Client, baseURL, version string) (int, error) {
+func getLatestBuild(ctx context.Context, baseURL, version string) (int, error) {
 	url := fmt.Sprintf("%s/versions/%s/builds", baseURL, version)
-	resp, err := doRequest(client, url)
+	resp, err := utils.DoRequest(ctx, nil, url)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch builds: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
+	defer resp.Body.Close()
 
 	var builds BuildsResponse
 	if err := json.NewDecoder(resp.Body).Decode(&builds); err != nil {
@@ -234,17 +167,13 @@ func getLatestBuild(client *http.Client, baseURL, version string) (int, error) {
 	return builds.Builds[len(builds.Builds)-1].Build, nil
 }
 
-func getJarName(client *http.Client, baseURL, version string, build int) (string, error) {
+func getJarName(ctx context.Context, baseURL, version string, build int) (string, error) {
 	url := fmt.Sprintf("%s/versions/%s/builds/%d", baseURL, version, build)
-	resp, err := doRequest(client, url)
+	resp, err := utils.DoRequest(ctx, nil, url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch download info: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
+	defer resp.Body.Close()
 
 	var download DownloadResponse
 	if err := json.NewDecoder(resp.Body).Decode(&download); err != nil {
@@ -252,110 +181,4 @@ func getJarName(client *http.Client, baseURL, version string, build int) (string
 	}
 
 	return download.Downloads.Application.Name, nil
-}
-
-func downloadFile(client *http.Client, url, filename string) error {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", userAgent)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to download: %w", err)
-	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
-
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	tempFile := filename + ".part"
-
-	if _, err := os.Stat(tempFile); err == nil {
-		if removeErr := os.Remove(tempFile); removeErr != nil {
-			return fmt.Errorf("failed to remove existing temp file: %w", removeErr)
-		}
-	}
-
-	out, err := os.Create(tempFile)
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	var closed bool
-	defer func() {
-		if !closed {
-			if err := out.Close(); err != nil {
-				_ = err
-			}
-		}
-	}()
-
-	success := false
-	defer func() {
-		if !success {
-			if !closed {
-				if err := out.Close(); err != nil {
-					_ = err
-				}
-				closed = true
-			}
-			if err := os.Remove(tempFile); err != nil {
-				_ = err
-			}
-		}
-	}()
-
-	var bar *progressbar.ProgressBar
-	if resp.ContentLength > 0 {
-		bar = progressbar.DefaultBytes(
-			resp.ContentLength,
-			"Downloading",
-		)
-	} else {
-		bar = progressbar.DefaultBytes(-1, "Downloading")
-	}
-
-	if bar != nil {
-		defer func() {
-			_ = bar.Close()
-			fmt.Println()
-		}()
-	}
-
-	buf := make([]byte, downloadBufSize)
-	var writer io.Writer = out
-	if bar != nil {
-		writer = io.MultiWriter(out, bar)
-	}
-	_, err = io.CopyBuffer(writer, resp.Body, buf)
-	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	if err := out.Close(); err != nil {
-		return fmt.Errorf("failed to close file: %w", err)
-	}
-	closed = true
-
-	success = true
-
-	if _, err := os.Stat(filename); err == nil {
-		if removeErr := os.Remove(filename); removeErr != nil {
-			return fmt.Errorf("failed to remove existing file: %w", removeErr)
-		}
-	}
-
-	if err := os.Rename(tempFile, filename); err != nil {
-		return fmt.Errorf("failed to rename temp file: %w", err)
-	}
-
-	fmt.Println("[OK] Download complete!")
-	return nil
 }

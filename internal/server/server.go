@@ -1,14 +1,15 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
 	"regexp"
 	"strings"
-	"syscall"
+	"time"
 
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 	"github.com/shirou/gopsutil/v3/mem"
 )
 
@@ -174,7 +175,7 @@ func CalculateSmartRAM(configMax, percentage, minRAM int) int {
 
 	if configMax > 0 {
 		if configMax > available {
-			fmt.Fprintf(os.Stderr, "[WARN] Configured MaxRAM (%dGB) exceeds available RAM (%dGB), adjusting to safe limit\n", configMax, available-1)
+			logger.Warn("Configured MaxRAM (%dGB) exceeds available RAM (%dGB), adjusting to safe limit", configMax, available-1)
 			safe := available - 1
 			if safe < minRAM {
 				return minRAM
@@ -197,7 +198,7 @@ func CalculateSmartRAM(configMax, percentage, minRAM int) int {
 	return calculated
 }
 
-func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string, javaVersion int, serverArgs []string) error {
+func RunServer(ctx context.Context, jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string, javaVersion int, serverArgs []string) error {
 	if javaPath == "" {
 		javaPath = javaCmd
 	}
@@ -220,17 +221,17 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string,
 				}
 			}
 			args = append(args, filteredFlags...)
-			fmt.Println("[INFO] Using Z Garbage Collector (ZGC) - Generational ZGC requires Java 17+")
+			logger.Info("Using Z Garbage Collector (ZGC) - Generational ZGC requires Java 17+")
 		} else {
 			args = append(args, zgcFlags...)
-			fmt.Println("[INFO] Using Z Garbage Collector (ZGC)")
+			logger.Info("Using Z Garbage Collector (ZGC)")
 		}
 
 		if maxRAM < minRAMForZGC {
-			fmt.Fprintf(os.Stderr, "[WARN] ZGC enabled but MaxRAM < %dGB, G1GC may perform better\n", minRAMForZGC)
+			logger.Warn("ZGC enabled but MaxRAM < %dGB, G1GC may perform better", minRAMForZGC)
 		}
 	} else {
-		fmt.Println("[INFO] Using G1 Garbage Collector (G1GC)")
+		logger.Info("Using G1 Garbage Collector (G1GC)")
 		args = append(args, aikarFlags...)
 	}
 
@@ -241,10 +242,6 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string,
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	defer signal.Stop(sigChan)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start server: %w", err)
@@ -261,16 +258,22 @@ func RunServer(jarFile string, minRAM, maxRAM int, useZGC bool, javaPath string,
 			return fmt.Errorf("server stopped with error: %w", err)
 		}
 		return nil
-	case sig := <-sigChan:
-		fmt.Printf("\n[INFO] Received signal: %v, shutting down server...\n", sig)
+	case <-ctx.Done():
+		logger.Info("Stopping server...")
 
-		if err := cmd.Process.Signal(sig); err != nil {
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
 			if !strings.Contains(err.Error(), "not supported by windows") {
-				fmt.Fprintf(os.Stderr, "[WARN] Failed to send signal to process: %v\n", err)
+				logger.Warn("Failed to send signal to process: %v", err)
 			}
 		}
 
-		<-done
-		return fmt.Errorf("server stopped by signal: %v", sig)
+		select {
+		case <-done:
+			return nil
+		case <-time.After(30 * time.Second):
+			logger.Warn("Server did not stop in time, killing...")
+			cmd.Process.Kill()
+			return ctx.Err()
+		}
 	}
 }

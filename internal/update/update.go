@@ -1,9 +1,9 @@
 package update
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -11,17 +11,13 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"time"
-)
 
-const (
-	timeout         = 30 * time.Second
-	downloadBufSize = 128 * 1024
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
 )
 
 var (
-	launcherVersion = "dev"
-	githubUserAgent = "minecraft-server-launcher-updater"
+	launcherVersion  = "dev"
+	githubUserAgent  = "minecraft-server-launcher-updater"
 	cachedGitVersion string
 	gitVersionOnce   sync.Once
 )
@@ -29,15 +25,6 @@ var (
 var (
 	githubAPIBase = "https://api.github.com/repos/nevcea-sub/minecraft-server-launcher/releases/latest"
 )
-
-var updateHTTPClient = &http.Client{
-	Timeout: timeout,
-	Transport: &http.Transport{
-		MaxIdleConns:        10,
-		MaxIdleConnsPerHost: 5,
-		IdleConnTimeout:     30 * time.Second,
-	},
-}
 
 type Asset struct {
 	Name               string `json:"name"`
@@ -80,23 +67,19 @@ func getVersionFromGit() string {
 	return cachedGitVersion
 }
 
-func CheckForUpdate() (bool, *ReleaseResponse, error) {
-	req, err := http.NewRequest("GET", githubAPIBase, nil)
+func CheckForUpdate(ctx context.Context) (bool, *ReleaseResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", githubAPIBase, nil)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("User-Agent", githubUserAgent)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	resp, err := updateHTTPClient.Do(req)
+	resp, err := utils.HTTPClient.Do(req)
 	if err != nil {
 		return false, nil, fmt.Errorf("failed to check for updates: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
+	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
 		return false, nil, fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
@@ -111,7 +94,7 @@ func CheckForUpdate() (bool, *ReleaseResponse, error) {
 	if currentVersion == "dev" {
 		return false, nil, nil
 	}
-	
+
 	currentVersion = normalizeVersion(currentVersion)
 	latestVersion := normalizeVersion(release.TagName)
 
@@ -229,7 +212,7 @@ func getAssetForCurrentOS(release *ReleaseResponse) *Asset {
 	return nil
 }
 
-func DownloadUpdate(release *ReleaseResponse) (string, error) {
+func DownloadUpdate(ctx context.Context, release *ReleaseResponse) (string, error) {
 	asset := getAssetForCurrentOS(release)
 	if asset == nil {
 		return "", fmt.Errorf("no compatible binary found for %s/%s", runtime.GOOS, runtime.GOARCH)
@@ -242,68 +225,13 @@ func DownloadUpdate(release *ReleaseResponse) (string, error) {
 
 	exeDir := filepath.Dir(exePath)
 	exeName := filepath.Base(exePath)
-	
+
 	tempFile := filepath.Join(exeDir, exeName+".new")
 
-	req, err := http.NewRequest("GET", asset.BrowserDownloadURL, nil)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("User-Agent", githubUserAgent)
-
-	resp, err := updateHTTPClient.Do(req)
-	if err != nil {
+	// Use shared DownloadFile utility
+	if err := utils.DownloadFile(ctx, asset.BrowserDownloadURL, tempFile); err != nil {
 		return "", fmt.Errorf("failed to download update: %w", err)
 	}
-	defer func() {
-		if err := resp.Body.Close(); err != nil {
-			_ = err
-		}
-	}()
-
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("download failed with status %d", resp.StatusCode)
-	}
-
-	out, err := os.Create(tempFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	var closed bool
-	defer func() {
-		if !closed {
-			if err := out.Close(); err != nil {
-				_ = err
-			}
-		}
-	}()
-
-	success := false
-	defer func() {
-		if !success {
-			if !closed {
-				if err := out.Close(); err != nil {
-					_ = err
-				}
-				closed = true
-			}
-			if err := os.Remove(tempFile); err != nil {
-				_ = err
-			}
-		}
-	}()
-
-	buf := make([]byte, downloadBufSize)
-	_, err = io.CopyBuffer(out, resp.Body, buf)
-	if err != nil {
-		return "", fmt.Errorf("failed to write file: %w", err)
-	}
-
-	if err := out.Close(); err != nil {
-		return "", fmt.Errorf("failed to close file: %w", err)
-	}
-	closed = true
 
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(tempFile, 0755); err != nil {
@@ -311,7 +239,6 @@ func DownloadUpdate(release *ReleaseResponse) (string, error) {
 		}
 	}
 
-	success = true
 	return tempFile, nil
 }
 
@@ -378,4 +305,3 @@ func ValidateUpdate(tempFile string) error {
 	}
 	return nil
 }
-

@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
 )
 
 func TestGetCurrentVersion(t *testing.T) {
@@ -171,12 +174,17 @@ func withMockAPI(t *testing.T, handler http.HandlerFunc, testVersion string, fn 
 
 	originalAPIBase := githubAPIBase
 	originalVersion := launcherVersion
+	oldClient := utils.HTTPClient
+	
 	defer func() {
 		githubAPIBase = originalAPIBase
 		launcherVersion = originalVersion
+		utils.HTTPClient = oldClient
 	}()
 
 	githubAPIBase = ts.URL
+	utils.HTTPClient = ts.Client()
+	
 	if testVersion != "" {
 		launcherVersion = testVersion
 	}
@@ -205,7 +213,7 @@ func TestCheckForUpdate_NewerVersion(t *testing.T) {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	}, "", func() {
-		hasUpdate, release, err := CheckForUpdate()
+		hasUpdate, release, err := CheckForUpdate(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -238,7 +246,7 @@ func TestCheckForUpdate_OlderVersion(t *testing.T) {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	}, "", func() {
-		hasUpdate, release, err := CheckForUpdate()
+		hasUpdate, release, err := CheckForUpdate(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -267,7 +275,7 @@ func TestCheckForUpdate_SameVersion(t *testing.T) {
 			t.Errorf("failed to encode response: %v", err)
 		}
 	}, "0.4.0", func() {
-		hasUpdate, release, err := CheckForUpdate()
+		hasUpdate, release, err := CheckForUpdate(context.Background())
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -286,7 +294,7 @@ func TestCheckForUpdate_APIFailure(t *testing.T) {
 	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}, "", func() {
-		hasUpdate, release, err := CheckForUpdate()
+		hasUpdate, release, err := CheckForUpdate(context.Background())
 		if err == nil {
 			t.Error("expected error for API failure")
 		}
@@ -306,7 +314,7 @@ func TestCheckForUpdate_InvalidJSON(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, "invalid json")
 	}, "", func() {
-		hasUpdate, release, err := CheckForUpdate()
+		hasUpdate, release, err := CheckForUpdate(context.Background())
 		if err == nil {
 			t.Error("expected error for invalid JSON")
 		}
@@ -320,4 +328,3 @@ func TestCheckForUpdate_InvalidJSON(t *testing.T) {
 		}
 	})
 }
-

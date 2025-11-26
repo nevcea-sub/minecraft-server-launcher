@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -25,6 +26,9 @@ auto_backup: false
 
 # 유지할 최대 백업 파일 개수 (오래된 백업부터 삭제됨)
 backup_count: 10
+
+# 백업 파일을 저장할 디렉토리 경로
+backup_dir: "backups"
 
 # 백업할 월드 디렉토리 목록
 backup_worlds:
@@ -61,6 +65,7 @@ type Config struct {
 	AutoUpdateLauncher bool     `yaml:"auto_update_launcher"` // 런처 자동 업데이트 여부
 	AutoBackup         bool     `yaml:"auto_backup"`          // 자동 백업 사용 여부
 	BackupCount        int      `yaml:"backup_count"`         // 유지할 백업 개수
+	BackupDir          string   `yaml:"backup_dir"`           // 백업 디렉토리
 	BackupWorlds       []string `yaml:"backup_worlds"`        // 백업할 월드 목록
 	MinRAM             int      `yaml:"min_ram"`              // 최소 RAM (GB)
 	MaxRAM             int      `yaml:"max_ram"`              // 최대 RAM (GB, 0=자동)
@@ -78,7 +83,7 @@ func Load(path string) (*Config, error) {
 		if err := os.WriteFile(path, []byte(defaultConfig), 0644); err != nil {
 			return nil, fmt.Errorf("failed to create config: %w", err)
 		}
-		fmt.Println("[INFO] Created config.yaml with default settings")
+		logger.Info("Created config.yaml with default settings")
 	}
 
 	var cfg Config
@@ -93,13 +98,16 @@ func Load(path string) (*Config, error) {
 	}
 
 	if cfg.AutoRAMPercentage == 0 {
-		cfg.AutoRAMPercentage = 85
+		cfg.AutoRAMPercentage = 50
 	}
 	if len(cfg.BackupWorlds) == 0 {
 		cfg.BackupWorlds = []string{"world", "world_nether", "world_the_end"}
 	}
 	if cfg.BackupCount == 0 {
 		cfg.BackupCount = 10
+	}
+	if cfg.BackupDir == "" {
+		cfg.BackupDir = "backups"
 	}
 	if cfg.LogFile == "" {
 		cfg.LogFile = "launcher.log"
@@ -122,14 +130,14 @@ func Load(path string) (*Config, error) {
 		if minRAM, err := strconv.Atoi(v); err == nil && minRAM > 0 {
 			cfg.MinRAM = minRAM
 		} else {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to parse MIN_RAM environment variable: %v\n", err)
+			logger.Warn("Failed to parse MIN_RAM environment variable: %v", err)
 		}
 	}
 	if v := os.Getenv("MAX_RAM"); v != "" {
 		if maxRAM, err := strconv.Atoi(v); err == nil && maxRAM >= 0 {
 			cfg.MaxRAM = maxRAM
 		} else {
-			fmt.Fprintf(os.Stderr, "[WARN] Failed to parse MAX_RAM environment variable: %v\n", err)
+			logger.Warn("Failed to parse MAX_RAM environment variable: %v", err)
 		}
 	}
 

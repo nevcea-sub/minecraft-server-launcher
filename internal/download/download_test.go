@@ -1,14 +1,22 @@
 package download
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/utils"
 )
+
+func withMockClient(client *http.Client, fn func()) {
+	oldClient := utils.HTTPClient
+	utils.HTTPClient = client
+	defer func() { utils.HTTPClient = oldClient }()
+	fn()
+}
 
 func TestGetLatestVersion(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -22,15 +30,15 @@ func TestGetLatestVersion(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := ts.Client()
-
-	version, err := getLatestVersion(client, ts.URL)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if version != "1.21" {
-		t.Errorf("expected 1.21, got %s", version)
-	}
+	withMockClient(ts.Client(), func() {
+		version, err := getLatestVersion(context.Background(), ts.URL)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version != "1.21" {
+			t.Errorf("expected 1.21, got %s", version)
+		}
+	})
 }
 
 func TestGetLatestBuild(t *testing.T) {
@@ -45,14 +53,15 @@ func TestGetLatestBuild(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := ts.Client()
-	build, err := getLatestBuild(client, ts.URL, "1.21")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if build != 20 {
-		t.Errorf("expected 20, got %d", build)
-	}
+	withMockClient(ts.Client(), func() {
+		build, err := getLatestBuild(context.Background(), ts.URL, "1.21")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if build != 20 {
+			t.Errorf("expected 20, got %d", build)
+		}
+	})
 }
 
 func TestGetJarName(t *testing.T) {
@@ -63,37 +72,13 @@ func TestGetJarName(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := ts.Client()
-	name, err := getJarName(client, ts.URL, "1.21", 20)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if name != "paper-1.21-20.jar" {
-		t.Errorf("expected paper-1.21-20.jar, got %s", name)
-	}
-}
-
-func TestDownloadFile(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, err := fmt.Fprint(w, "file content"); err != nil {
-			_ = err
+	withMockClient(ts.Client(), func() {
+		name, err := getJarName(context.Background(), ts.URL, "1.21", 20)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-	}))
-	defer ts.Close()
-
-	tmpDir := t.TempDir()
-	filePath := filepath.Join(tmpDir, "test.jar")
-
-	err := downloadFile(ts.Client(), ts.URL, filePath)
-	if err != nil {
-		t.Fatalf("download failed: %v", err)
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(content) != "file content" {
-		t.Errorf("content mismatch")
-	}
+		if name != "paper-1.21-20.jar" {
+			t.Errorf("expected paper-1.21-20.jar, got %s", name)
+		}
+	})
 }

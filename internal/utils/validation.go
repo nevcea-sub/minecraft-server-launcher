@@ -10,6 +10,8 @@ import (
 	"os"
 	"regexp"
 	"strings"
+
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 )
 
 const (
@@ -76,7 +78,7 @@ func validateJarStructure(jarPath string) (*zip.Reader, error) {
 	}
 
 	if !hasManifest {
-		fmt.Fprintf(os.Stderr, "[WARN] JAR file missing META-INF/MANIFEST.MF: %s\n", jarPath)
+		logger.Warn("JAR file missing META-INF/MANIFEST.MF: %s", jarPath)
 	}
 
 	return reader, nil

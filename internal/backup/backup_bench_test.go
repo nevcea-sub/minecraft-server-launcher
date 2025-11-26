@@ -50,7 +50,7 @@ func BenchmarkRotateBackups_ManyFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		PerformBackup([]string{}, retentionLimit)
+		PerformBackup([]string{}, "backups", retentionLimit)
 	}
 }
 
@@ -73,7 +73,6 @@ func BenchmarkRotateBackups_FewFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		PerformBackup([]string{}, retentionLimit)
+		PerformBackup([]string{}, "backups", retentionLimit)
 	}
 }
-

@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 )
 
 func parseJarFileName(filename string) (version string, build int, ok bool) {
@@ -115,7 +117,7 @@ eula=true
 		return fmt.Errorf("failed to write eula.txt: %w", err)
 	}
 
-	fmt.Println("[INFO] Automatically accepted Minecraft EULA")
+	logger.Info("Automatically accepted Minecraft EULA")
 	return nil
 }
 

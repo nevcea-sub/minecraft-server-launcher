@@ -9,19 +9,24 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/nevcea-sub/minecraft-server-launcher/internal/logger"
 )
 
 const (
-	BackupDir     = "backups"
 	backupBufSize = 32 * 1024
 )
 
-func PerformBackup(worlds []string, retentionCount int) error {
-	if err := os.MkdirAll(BackupDir, 0755); err != nil {
+func PerformBackup(worlds []string, backupDir string, retentionCount int) error {
+	if backupDir == "" {
+		backupDir = "backups"
+	}
+
+	if err := os.MkdirAll(backupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	testFile := filepath.Join(BackupDir, ".write-test")
+	testFile := filepath.Join(backupDir, ".write-test")
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
 		return fmt.Errorf("backup directory is not writable: %w", err)
 	}
@@ -31,23 +36,23 @@ func PerformBackup(worlds []string, retentionCount int) error {
 
 	existingWorlds := filterExistingWorlds(worlds)
 	if len(existingWorlds) == 0 {
-		fmt.Println("[INFO] No worlds found to backup, skipping")
+		logger.Info("No worlds found to backup, skipping")
 		return nil
 	}
 
 	timestamp := time.Now().Format("2006-01-02_15-04-05")
-	backupFile := filepath.Join(BackupDir, fmt.Sprintf("backup-%s.zip", timestamp))
+	backupFile := filepath.Join(backupDir, fmt.Sprintf("backup-%s.zip", timestamp))
 
-	fmt.Printf("[INFO] Creating backup: %s\n", backupFile)
+	logger.Info("Creating backup: %s", backupFile)
 
 	if err := createZip(backupFile, existingWorlds); err != nil {
 		return err
 	}
 
-	fmt.Println("[OK] Backup created successfully")
+	logger.Info("Backup created successfully")
 
-	if err := rotateBackups(retentionCount); err != nil {
-		fmt.Fprintf(os.Stderr, "[WARN] Failed to rotate backups: %v\n", err)
+	if err := rotateBackups(backupDir, retentionCount); err != nil {
+		logger.Warn("Failed to rotate backups: %v", err)
 	}
 
 	return nil
@@ -141,12 +146,12 @@ func createZip(targetFile string, worlds []string) error {
 	return nil
 }
 
-func rotateBackups(limit int) error {
+func rotateBackups(backupDir string, limit int) error {
 	if limit <= 0 {
 		return nil
 	}
 
-	files, err := os.ReadDir(BackupDir)
+	files, err := os.ReadDir(backupDir)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory: %w", err)
 	}
@@ -180,8 +185,8 @@ func rotateBackups(limit int) error {
 
 	toDelete := len(backups) - limit
 	for i := 0; i < toDelete; i++ {
-		path := filepath.Join(BackupDir, backups[i].entry.Name())
-		fmt.Printf("[INFO] Deleting old backup: %s\n", backups[i].entry.Name())
+		path := filepath.Join(backupDir, backups[i].entry.Name())
+		logger.Info("Deleting old backup: %s", backups[i].entry.Name())
 		if err := os.Remove(path); err != nil {
 			return fmt.Errorf("failed to remove backup file: %w", err)
 		}

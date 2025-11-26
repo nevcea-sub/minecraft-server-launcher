@@ -26,7 +26,7 @@ func BenchmarkRotateBackups_ManyFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		backup.PerformBackup([]string{}, 10)
+		backup.PerformBackup([]string{}, "backups", 10)
 	}
 }
 
@@ -47,7 +47,6 @@ func BenchmarkRotateBackups_FewFiles(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		backup.PerformBackup([]string{}, 10)
+		backup.PerformBackup([]string{}, "backups", 10)
 	}
 }
-
