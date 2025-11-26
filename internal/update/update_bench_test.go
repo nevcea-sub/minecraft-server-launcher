@@ -73,21 +73,24 @@ func BenchmarkGetAssetForCurrentOS_ManyAssets(b *testing.B) {
 	var targetName string
 	switch osName {
 	case "windows":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			targetName = "paper-launcher-windows-amd64.exe"
-		} else if arch == "arm64" {
+		case "arm64":
 			targetName = "paper-launcher-windows-arm64.exe"
 		}
 	case "linux":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			targetName = "paper-launcher-linux-amd64"
-		} else if arch == "arm64" {
+		case "arm64":
 			targetName = "paper-launcher-linux-arm64"
 		}
 	case "darwin":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			targetName = "paper-launcher-darwin-amd64"
-		} else if arch == "arm64" {
+		case "arm64":
 			targetName = "paper-launcher-darwin-arm64"
 		}
 	}
@@ -111,4 +114,3 @@ func BenchmarkGetCurrentVersion(b *testing.B) {
 		_ = GetCurrentVersion()
 	}
 }
-

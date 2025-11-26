@@ -88,7 +88,7 @@ func getExpectedAssetName() string {
 			"arm64": "paper-launcher-darwin-arm64",
 		},
 	}
-	
+
 	if osMap, ok := assetMap[runtime.GOOS]; ok {
 		if name, ok := osMap[runtime.GOARCH]; ok {
 			return name
@@ -139,7 +139,7 @@ func TestGetAssetForCurrentOS_NoMatch(t *testing.T) {
 
 func TestValidateUpdate(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	validFile := filepath.Join(tmpDir, "valid.bin")
 	if err := os.WriteFile(validFile, []byte("test content"), 0644); err != nil {
 		t.Fatal(err)
@@ -168,14 +168,14 @@ func setupMockServer(handler http.HandlerFunc) *httptest.Server {
 	return httptest.NewServer(handler)
 }
 
-func withMockAPI(t *testing.T, handler http.HandlerFunc, testVersion string, fn func()) {
+func withMockAPI(handler http.HandlerFunc, testVersion string, fn func()) {
 	ts := setupMockServer(handler)
 	defer ts.Close()
 
 	originalAPIBase := githubAPIBase
 	originalVersion := launcherVersion
 	oldClient := utils.HTTPClient
-	
+
 	defer func() {
 		githubAPIBase = originalAPIBase
 		launcherVersion = originalVersion
@@ -184,7 +184,7 @@ func withMockAPI(t *testing.T, handler http.HandlerFunc, testVersion string, fn 
 
 	githubAPIBase = ts.URL
 	utils.HTTPClient = ts.Client()
-	
+
 	if testVersion != "" {
 		launcherVersion = testVersion
 	}
@@ -193,7 +193,7 @@ func withMockAPI(t *testing.T, handler http.HandlerFunc, testVersion string, fn 
 }
 
 func TestCheckForUpdate_NewerVersion(t *testing.T) {
-	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -233,7 +233,7 @@ func TestCheckForUpdate_NewerVersion(t *testing.T) {
 }
 
 func TestCheckForUpdate_OlderVersion(t *testing.T) {
-	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(func(w http.ResponseWriter, r *http.Request) {
 		release := ReleaseResponse{
 			TagName: "v0.2.0",
 			Name:    "Release 0.2.0",
@@ -262,7 +262,7 @@ func TestCheckForUpdate_OlderVersion(t *testing.T) {
 }
 
 func TestCheckForUpdate_SameVersion(t *testing.T) {
-	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(func(w http.ResponseWriter, r *http.Request) {
 		release := ReleaseResponse{
 			TagName: "0.4.0",
 			Name:    "Release 0.4.0",
@@ -291,7 +291,7 @@ func TestCheckForUpdate_SameVersion(t *testing.T) {
 }
 
 func TestCheckForUpdate_APIFailure(t *testing.T) {
-	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}, "", func() {
 		hasUpdate, release, err := CheckForUpdate(context.Background())
@@ -310,7 +310,7 @@ func TestCheckForUpdate_APIFailure(t *testing.T) {
 }
 
 func TestCheckForUpdate_InvalidJSON(t *testing.T) {
-	withMockAPI(t, func(w http.ResponseWriter, r *http.Request) {
+	withMockAPI(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprint(w, "invalid json")
 	}, "", func() {

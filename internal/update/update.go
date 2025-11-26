@@ -91,9 +91,6 @@ func CheckForUpdate(ctx context.Context) (bool, *ReleaseResponse, error) {
 	}
 
 	currentVersion := GetCurrentVersion()
-	if currentVersion == "dev" {
-		return false, nil, nil
-	}
 
 	currentVersion = normalizeVersion(currentVersion)
 	latestVersion := normalizeVersion(release.TagName)
@@ -180,21 +177,24 @@ func getAssetForCurrentOS(release *ReleaseResponse) *Asset {
 	var assetName string
 	switch osName {
 	case "windows":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			assetName = "paper-launcher-windows-amd64.exe"
-		} else if arch == "arm64" {
+		case "arm64":
 			assetName = "paper-launcher-windows-arm64.exe"
 		}
 	case "linux":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			assetName = "paper-launcher-linux-amd64"
-		} else if arch == "arm64" {
+		case "arm64":
 			assetName = "paper-launcher-linux-arm64"
 		}
 	case "darwin":
-		if arch == "amd64" {
+		switch arch {
+		case "amd64":
 			assetName = "paper-launcher-darwin-amd64"
-		} else if arch == "arm64" {
+		case "arm64":
 			assetName = "paper-launcher-darwin-arm64"
 		}
 	}

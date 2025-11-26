@@ -51,7 +51,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 0
         run: |
-          go build -v -ldflags="-s -w" -o ${{ matrix.name }} .
+          go build -v -ldflags="-s -w -X 'github.com/nevcea-sub/minecraft-server-launcher/internal/update.launcherVersion=${{ github.ref_name }}'" -o ${{ matrix.name }} .
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
