@@ -56,7 +56,6 @@ func DoRequest(ctx context.Context, client *http.Client, url string) (*http.Resp
 
 		resp, err := client.Do(req)
 		if err != nil {
-			// Check if context was canceled
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
@@ -83,7 +82,6 @@ func DoRequest(ctx context.Context, client *http.Client, url string) (*http.Resp
 	return nil, fmt.Errorf("request failed after %d attempts: %w", MaxRetries, lastErr)
 }
 
-// DownloadFile downloads a file from a URL to a local path with progress bar and context support
 func DownloadFile(ctx context.Context, url, filename string) error {
 	resp, err := DoRequest(ctx, HTTPClient, url)
 	if err != nil {
@@ -101,7 +99,6 @@ func DownloadFile(ctx context.Context, url, filename string) error {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}
 
-	// Use a flag to check if we closed successfully
 	closed := false
 	defer func() {
 		if !closed {
@@ -140,7 +137,6 @@ func DownloadFile(ctx context.Context, url, filename string) error {
 		writer = io.MultiWriter(out, bar)
 	}
 
-	// Copy with context check
 	done := make(chan error, 1)
 	go func() {
 		_, err := io.CopyBuffer(writer, resp.Body, buf)
